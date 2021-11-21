@@ -155,7 +155,7 @@ int bvfs_init(const char *fs_fileName) {
 
         for (uint16_t j = 0; j < maxFreeBlocks; j++) { // 63 iterations
             // Need to seek to next block each time
-            lseek(pFD, freeSpot*blockSize, SEEK_SET);
+            lseek(pFD, (freeSpot-1)*blockSize, SEEK_SET);
 
             for (uint16_t i = freeSpot; i < (freeSpot + 256); i++) { // Fills a whole freeSpace block
                 if (i >= maxBlocks) { // Don't add the next spot, add NULL to end and fill with zeros
@@ -169,10 +169,11 @@ int bvfs_init(const char *fs_fileName) {
                     freeListLoc++;
                 }
             }
-            freeListLoc = 0;
+            freeSpot += 258; // Takes me to the first place data can be stored after the new free node
+            freeListLoc = 0; // Reset the location inside the freeList
 
             // Create the freeSpace struct
-            printf("%d\n", *freeList);
+            printf("%d\n", freeList[0]);
             freeSpace FS = {*freeList, nextFreeNode};
             
             // Write the free block to file at the seeked location from above
