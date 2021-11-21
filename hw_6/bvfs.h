@@ -39,11 +39,11 @@
 struct Inode { //TODO Add more stuff to this struct
     char fileName[32];
     uint8_t numBlocks;
-    uint8_t numBytes;
+    uint32_t numBytes;
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
     // Meaning I need to multiply by blockSize to get actual location
     time_t lastModTime;
-    char padding[212]; // Extra padding to fill the block size
+    char padding[204]; // Extra padding to fill the block size
 
 } typedef Inode;
 
@@ -116,9 +116,16 @@ int bvfs_init(const char *fs_fileName) {
             // Open it and read data for in-memory data structures 
             pFD = open(fs_fileName, O_CREAT | O_RDWR , S_IRUSR | S_IWUSR);
 
-            // TODO change this stuff later and initalize in-memory data structures
+            // Read the super block
             read(pFD, (void*)&SB, sizeof(SB));
             printf("Read from file: %d + %d + [%s]\n", SB.remainingFiles, SB.firstFreeList, SB.padding);
+
+            // Seek to where the first free block is
+            lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
+
+            // Read the first freeBlock based on the super block
+            read(pFD, (void*)&FS, sizeof(FS));
+            printf("Read from free block: %d + %d\n", FS.freeBlocks[0], FS.nextFreeSpaceBlock);
 
         }
         else {
@@ -126,6 +133,7 @@ int bvfs_init(const char *fs_fileName) {
             // Then return -1 as stated above
             fprintf(stderr, "Error opening file: %s\n", strerror(errno));
             return -1;
+
         }
     }
     else {
@@ -158,28 +166,30 @@ int bvfs_init(const char *fs_fileName) {
             lseek(pFD, (freeSpot-1)*blockSize, SEEK_SET);
 
             for (uint16_t i = freeSpot; i < (freeSpot + 256); i++) { // Fills a whole freeSpace block
-                if (i >= maxBlocks) { // Don't add the next spot, add NULL to end and fill with zeros
+                if (i > maxBlocks) { // Don't add the next spot, add NULL to end and fill with zeros
                     nextFreeNode = 0; 
                     freeList[freeListLoc] = 0;
                     freeListLoc++;
                 }
-                else {
-                    nextFreeNode = i + 1;
+                else { // Add pointer to next free spot and recalculate the pointer to next free node
+                    nextFreeNode = i;
                     freeList[freeListLoc] = i;
                     freeListLoc++;
                 }
             }
-            freeSpot += 258; // Takes me to the first place data can be stored after the new free node
+            freeSpot += 256; // Increment the place where the next free spot starts
             freeListLoc = 0; // Reset the location inside the freeList
 
             // Create the freeSpace struct
-            printf("%d\n", freeList[0]);
-            freeSpace FS = {*freeList, nextFreeNode};
+            freeSpace FB; 
+            memcpy(FB.freeBlocks, freeList, sizeof(freeList));
+            FB.nextFreeSpaceBlock = nextFreeNode;
             
             // Write the free block to file at the seeked location from above
-            write(pFD, (void*)&FS, sizeof(FS));
+            write(pFD, (void*)&FB, sizeof(FB));
         }
 
+        // Let the user know that the partition was created
         printf("Created Partition: %s\n", fs_fileName);
     }
 
@@ -256,7 +266,7 @@ int bvfs_open(const char *fileName, int mode) {
  * to the bvfs file system.
  *
  * Input Parameters
- *   fileName: A c-string representing the name of the file you wish to fetch
+ *   fileName: A int representing the file descriptor of the file you wish to fetch
  *             (or create) in the bvfs file system.
  *
  * Return Value
