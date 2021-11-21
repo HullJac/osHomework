@@ -1,0 +1,38 @@
+#include <pthread.h>
+#include <unistd.h>
+
+struct phil {
+    int numPhils;
+    int id;
+    int meals;
+    pthread_mutex_t* muts;
+};
+
+void* doTheEat(void* args) {
+
+}
+
+float dine_philosophers_dine(int numPhilosophers, int mealSize)
+{
+    float tries = 0;
+    struct phil s_list = 
+    pthread_t tID[numPhilosophers];
+    pthread_mutex_t mutList[numPhilosophers];
+    for (int i = 0; i < numPhilosophers; i++) {
+        // Create struct 
+        
+        // Create mutextes
+        pthread_mutex_init(&(mutList[i]), NULL);
+        // Launch threads
+        pthread_create(&(tID[i]), NULL, doTheEat, &(s_list[i]));
+    }
+
+    // Joining the threads
+    for (int i = 0; i < numPhilosophers; i++) {
+        pthread_join(tID[i], NULL);
+    }
+
+    // Destroy the mutexes
+    
+    return tries/(mealSize*numPhilosophers);
+}
