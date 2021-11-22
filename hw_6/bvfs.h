@@ -109,11 +109,11 @@ int getFreeBlock() {
     // Otherwise, if there are no free spaces left in the current block
     // move to the next free node block
     if (block == 0) {
-        // store the address of the current block to return later
+        // Store the address of the current first free block to return later
         // This will be the block that we give them to use
-        block = FS.nextFreeSpaceBlock - 256;
+        block = SB.firstFreeList; 
         
-        // Reset superBlock  
+        // Reset superBlock
         SB.firstFreeList = FS.nextFreeSpaceBlock;
         
         // Seek to the next freeSpace block
@@ -137,16 +137,32 @@ void giveBackBlock(int blk) {
         block = FS.freeBlocks[i];
         if (block == 0) {
             ifStatement = 1;
-
+            FS.freeBlocks[i] = blk;
+            break;
         }
     }
     
-    // Else create a new free block node and give them that one
-    if (ifStatment == 0) {
+    // Else create a new free block node and put it in the list
+    if (ifStatement == 0) {
+        uint16_t nextFree = SB.firstFreeList; 
+        uint16_t freeList[255];
 
+        // Fill the free list with zeros
+        for (uint16_t i = 0; i < 255; i++) {
+            freeList[i] = 0;
+        }
+        
+        // Create node and add stuff to it
+        freeSpace newFree;
+        memcpy(newFree.freeBlocks, freeList, sizeof(freeList));
+        newFree.nextFreeSpaceBlock = nextFree;
+        
+        // Write the node to the file
+        write(pFD, (void*)&newFree, sizeof(newFree));
+
+        // Rearange the head pointer to point to the new block
+        SB.firstFreeList = blk;
     }
-    // Think about if the things is full
-    // if it is just create an empty 
 }
 
 
