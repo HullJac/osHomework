@@ -38,6 +38,7 @@
 // Struct to represent the Inodes in this file system
 struct Inode { //TODO Add more stuff to this struct
     char fileName[32];
+    // Add file descriptor here
     uint8_t numBlocks;
     uint32_t numBytes;
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
@@ -52,6 +53,7 @@ struct Inode { //TODO Add more stuff to this struct
 struct superBlock { //TODO possibly add more stuff here
     uint16_t remainingFiles;
     uint16_t firstFreeList; // Represented as an index of blocks
+    // Add file descriptors here
     char padding[508]; // Extra padding to fill the block size
 
 } typedef superBlock;
@@ -66,11 +68,13 @@ struct freeSpace {
 
 
 //** Global Variables **//
+uint8_t inited = 0;             // Bool to check if init has been called
 uint16_t blockSize = 512;       // Reference to size of block in our file system
-uint16_t maxFreeBlocks = 63;    // Most Free node we can have
+uint16_t maxFreeBlocks = 63;    // Most Free node we can have hard coded sadly
 uint16_t maxBlocks = 16384;     // Max number of block available in file system
 superBlock SB;                  // Super block to manipulate later
 freeSpace FS;                   // First free space block 
+int pFD;                        // Make the file descriptor global
 
 
 // Prototypes
@@ -84,6 +88,66 @@ int bvfs_unlink(const char* fileName);
 void bvfs_ls();
 
 
+
+//Helper functions
+
+// Finds first free block
+int getFreeBlock() {
+    // Find the first free block
+    int block;
+    int i = 0;
+    for (i; i < 255; i++) {
+        block = FS.freeBlocks[i];
+        if (block != 0) {
+            // Set the location in the freeblock list to 0
+            FS.freeBlocks[i] = 0;
+            
+            // Return the pointer to that block given
+            return block;
+        }
+    }
+    // Otherwise, if there are no free spaces left in the current block
+    // move to the next free node block
+    if (block == 0) {
+        // store the address of the current block to return later
+        // This will be the block that we give them to use
+        block = FS.nextFreeSpaceBlock - 256;
+        
+        // Reset superBlock  
+        SB.firstFreeList = FS.nextFreeSpaceBlock;
+        
+        // Seek to the next freeSpace block
+        lseek(pFD, FS.nextFreeSpaceBlock*blockSize, SEEK_SET);
+
+        // Read the next freeBlock and put it in FS
+        read(pFD, (void*)&FS, sizeof(FS));
+        
+        // Return the block
+        return block;
+    }
+}
+
+
+// Adds a block back to the free space
+void giveBackBlock(int blk) {
+    // Try to find a spot in the current first free block
+    int block;
+    int ifStatement = 0;
+    for (int i = 0; i < 255; i++) {
+        block = FS.freeBlocks[i];
+        if (block == 0) {
+            ifStatement = 1;
+
+        }
+    }
+    
+    // Else create a new free block node and give them that one
+    if (ifStatment == 0) {
+
+    }
+    // Think about if the things is full
+    // if it is just create an empty 
+}
 
 
 /*
@@ -126,6 +190,9 @@ int bvfs_init(const char *fs_fileName) {
             // Read the first freeBlock based on the super block
             read(pFD, (void*)&FS, sizeof(FS));
             printf("Read from free block: %d + %d\n", FS.freeBlocks[0], FS.nextFreeSpaceBlock);
+            
+            // Set inited to true
+            inited = 1;
 
         }
         else {
@@ -141,10 +208,12 @@ int bvfs_init(const char *fs_fileName) {
         
         // Create and write the inital super block
         superBlock SB = {256, 257, 0};
+        //printf("super block: %ld\n", sizeof(SB));
         write(pFD, (void*)&SB, sizeof(SB));
 
         // Create an array of Inodes
         Inode IN = {0,0,0,0,0,0};
+        //printf("inode: %ld\n", sizeof(IN));
         Inode INlist [256];
         
         // Write empty Inode blocks to array
@@ -184,6 +253,7 @@ int bvfs_init(const char *fs_fileName) {
             freeSpace FB; 
             memcpy(FB.freeBlocks, freeList, sizeof(freeList));
             FB.nextFreeSpaceBlock = nextFreeNode;
+            //printf("free block: %ld\n", sizeof(FB));
             
             // Write the free block to file at the seeked location from above
             write(pFD, (void*)&FB, sizeof(FB));
@@ -191,6 +261,10 @@ int bvfs_init(const char *fs_fileName) {
 
         // Let the user know that the partition was created
         printf("Created Partition: %s\n", fs_fileName);
+
+        // Set inited to true
+        inited = 1;
+
     }
 
     return 0;
@@ -214,7 +288,18 @@ int bvfs_init(const char *fs_fileName) {
  *           called etc.). Also, print a meaningful error to stderr prior to
  *           returning.
  */
-int bvfs_detach() {
+int bvfs_detach() { //TODO check for more stuff to do here like writing FB and SB
+        
+    // FS
+
+
+    if (inited == 1) {
+        return 0;
+    }
+    else {
+        fprintf(stderr, "bvfs_init was never called.");
+        return -1;
+    }
 }
 
 
@@ -251,6 +336,28 @@ int BVFS_WTRUNC = 2;
  *           stderr prior to returning.
  */
 int bvfs_open(const char *fileName, int mode) {
+    if (inited == 1) {
+        // First check to see if the file exists yet or not
+        
+        // Now check the mode
+        if (mode == 0) {
+            return 0;
+        }
+        else if (mode == 1) {
+            return 0;
+        }
+        else if (mode == 2) {
+           return 0; 
+        }
+        else {
+            fprintf(stderr, "That is not a valid mode: %d", mode);
+            return -1;
+        }
+    }
+    else {
+        fprintf(stderr, "bvfs_init was never called.");
+        return -1;
+    }
 }
 
 

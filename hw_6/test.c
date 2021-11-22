@@ -17,7 +17,10 @@ int main(int argc, char** argv) {
     // Get partition name from command line argument
     char *partitionName = argv[1];
 
+    //bvfs_open("file", BVFS_WTRUNC);
     bvfs_init(partitionName);
+    //bvfs_open("firstFile", BVFS_WTRUNC);
+
 
     return 0;
 }
