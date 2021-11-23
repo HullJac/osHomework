@@ -35,6 +35,9 @@
 #include <time.h>
 
 
+//TODO Run this on Kay so that I make sure the blocks are all still 512 and stuff lines up and works
+
+
 // Struct to represent the Inodes in this file system
 struct Inode { //TODO Add more stuff to this struct
     char fileName[32];
@@ -251,7 +254,7 @@ int bvfs_init(const char *fs_fileName) {
             lseek(pFD, (freeSpot-1)*blockSize, SEEK_SET);
 
             for (uint16_t i = freeSpot; i < (freeSpot + 256); i++) { // Fills a whole freeSpace block
-                if (i > maxBlocks) { // Don't add the next spot, add NULL to end and fill with zeros
+                if (i >= maxBlocks) { // Don't add the next spot, add NULL to end and fill with zeros
                     nextFreeNode = 0; 
                     freeList[freeListLoc] = 0;
                     freeListLoc++;
@@ -274,6 +277,11 @@ int bvfs_init(const char *fs_fileName) {
             // Write the free block to file at the seeked location from above
             write(pFD, (void*)&FB, sizeof(FB));
         }
+        // Make sure all free spaces after the last free node are accounted for
+        // I fixed this issue by seeking to the end of the file and writing a zero
+        uint8_t extra = 0;
+        lseek(pFD, 8388607, SEEK_SET);
+        write(pFD, (void*)&extra, sizeof(extra));
 
         // Let the user know that the partition was created
         printf("Created Partition: %s\n", fs_fileName);
