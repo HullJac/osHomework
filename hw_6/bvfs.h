@@ -201,10 +201,6 @@ void giveBackBlock(int blk) {
 
 // Finds the corresponding file descriptor given a file name
 int findFileDesc(const char *fileName) {
-    // Grab the Inode list and store it in memory
-    lseek(pFD, blockSize, SEEK_SET);
-    read(pFD, (void*)&INList ,sizeof(INList));
-    //FIXME double check if this works. It should but just check anyway
 
     // Search through the Inodes to see if any of them have the name passed to this funciton
     for (int i = 0; i < maxFiles; i++) {
@@ -255,6 +251,11 @@ int bvfs_init(const char *fs_fileName) {
             // Read the super block
             read(pFD, (void*)&SB, sizeof(SB));
             printf("Read from file: %d + %d + [%s]\n", SB.remainingFiles, SB.firstFreeList, SB.padding);
+            
+            // Grab the Inode list and store it in memory
+            lseek(pFD, blockSize, SEEK_SET);
+            read(pFD, (void*)&INList ,sizeof(INList));
+            //FIXME double check if this works. It should but just check anyway
 
             // Seek to where the first free block is
             lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
@@ -417,21 +418,52 @@ int BVFS_WTRUNC = 2;
 int bvfs_open(const char *fileName, int mode) {
     if (inited == 1) {
         // First check to see if the file exists yet or not
+        int fileDescriptor = findFileDesc(fileName);
+        if (fileDescriptor != -1) {
+            // Now check the mode
+            if (mode == 0) {
+                return 0;
+            }
+            else if (mode == 1) {
+                return 0;
+            }
+            else if (mode == BVFS_WTRUNC) {
+               return 0; 
+            }
+            else {
+                fprintf(stderr, "That is not a valid mode: %d", mode);
+                return -1;
+            }
+        }
 
-        
-        // Now check the mode
-        if (mode == 0) {
-            return 0;
-        }
-        else if (mode == 1) {
-            return 0;
-        }
-        else if (mode == 2) {
-           return 0; 
-        }
+        // Check if the mode is a write and not read
         else {
-            fprintf(stderr, "That is not a valid mode: %d", mode);
-            return -1;
+            // If it's readonly mode print to std error and return -1
+            if (mode == BVFS_RDONL) {
+                fprintf(stderr, "You cannot open a new file in read only mode.");
+                return -1;
+            }
+            // If it's write, create the file and write the stuff
+            else {
+                // TODO Create the file
+                
+                //FIXME not sure if I need both of these modes here since its a new file
+                // If the mode is append
+                // TODO write this
+                if (mode == BVFS_WAPPEND) {
+                    
+                }
+                // TODO write this
+                else if (mode == BVFS_WTRUNC) {
+
+                }
+                // Error because this is a bad input
+                else {
+                    fprintf(stderr, "That is not a valid mode to open a file with.");
+                    return -1;
+                }
+            }
+
         }
     }
     else {
