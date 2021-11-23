@@ -40,14 +40,14 @@
 
 // Struct to represent the Inodes in this file system
 struct Inode { //TODO Add more stuff to this struct
-    char fileName[32];
-    // Add file descriptor here
+    char name[32];
+    uint8_t fd;
     uint8_t numBlocks;
     uint32_t numBytes;
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
     // Meaning I need to multiply by blockSize to get actual location
     time_t lastModTime;
-    char padding[204]; // Extra padding to fill the block size
+    char padding[208]; // Extra padding to fill the block size
 
 } typedef Inode;
 
@@ -78,6 +78,7 @@ uint16_t maxBlocks = 16384;     // Max number of block available in file system
 uint16_t maxFiles = 256;        // Max number of files that can be stored in file system
 superBlock SB;                  // Super block to manipulate later
 freeSpace FS;                   // First free space block 
+Inode INList[256];              // Inode list to store all inodes
 int pFD;                        // Make the file descriptor global
 
 
@@ -198,17 +199,28 @@ void giveBackBlock(int blk) {
 }
 
 
-// Finds the 
-
+// Finds the corresponding file descriptor given a file name
 int findFileDesc(const char *fileName) {
+    // Grab the Inode list and store it in memory
+    lseek(pFD, blockSize, SEEK_SET);
+    read(pFD, (void*)&INList ,sizeof(INList));
+    //FIXME double check if this works. It should but just check anyway
+
     // Search through the Inodes to see if any of them have the name passed to this funciton
     for (int i = 0; i < maxFiles; i++) {
-        
+        if (INList[i].name == fileName) {
+            return INList[i].fd;
+        }
     }
 
     // Otherwise return -1 to signify not found
     return -1;
 }
+
+
+
+
+
 
 /*
  * int bvfs_init(const char *fs_fileName);
@@ -272,7 +284,7 @@ int bvfs_init(const char *fs_fileName) {
         write(pFD, (void*)&SB, sizeof(SB));
 
         // Create an array of Inodes
-        Inode IN = {0,0,0,0,0,0};
+        Inode IN = {0,0,0,0,0,0,0};
         //printf("inode: %ld\n", sizeof(IN));
         Inode INlist [256];
         
@@ -318,9 +330,10 @@ int bvfs_init(const char *fs_fileName) {
             // Write the free block to file at the seeked location from above
             write(pFD, (void*)&FB, sizeof(FB));
         }
+
         // Make sure all free spaces after the last free node are accounted for
         // I fixed this issue by seeking to the end of the file and writing a zero
-        char extra[1];
+        char extra[1] = {0};
         lseek(pFD, 8388607, SEEK_SET);
         write(pFD, (void*)&extra, sizeof(extra));
 
@@ -353,10 +366,10 @@ int bvfs_init(const char *fs_fileName) {
  *           called etc.). Also, print a meaningful error to stderr prior to
  *           returning.
  */
-int bvfs_detach() { //TODO check for more stuff to do here like writing FB and SB
-        
-    // FS
-
+int bvfs_detach() { 
+    //TODO check for more stuff to do here like writing FB and SB
+    //TODO right now, I am handling writing everything when something changes
+    //TODO check for anything that was malloced
 
     if (inited == 1) {
         return 0;
