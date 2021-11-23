@@ -34,9 +34,9 @@
 #include <stdint.h>
 #include <time.h>
 
-
+//TODO
 //TODO Run this on Kay so that I make sure the blocks are all still 512 and stuff lines up and works
-
+//TODO
 
 // Struct to represent the Inodes in this file system
 struct Inode { //TODO Add more stuff to this struct
@@ -75,6 +75,7 @@ uint8_t inited = 0;             // Bool to check if init has been called
 uint16_t blockSize = 512;       // Reference to size of block in our file system
 uint16_t maxFreeBlocks = 63;    // Most Free node we can have hard coded sadly
 uint16_t maxBlocks = 16384;     // Max number of block available in file system
+uint16_t maxFiles = 256;        // Max number of files that can be stored in file system
 superBlock SB;                  // Super block to manipulate later
 freeSpace FS;                   // First free space block 
 int pFD;                        // Make the file descriptor global
@@ -91,10 +92,15 @@ int bvfs_unlink(const char* fileName);
 void bvfs_ls();
 
 
-
-//Helper functions
+///////////////////
+//Helper functions/
+///////////////////
 
 // Finds first free block
+// Sets that address to taken
+// Returns a pointer to that block
+// If needed, will move to the next free block and return the address
+// of the empty free block while change the head pointer of the free block list
 int getFreeBlock() {
     // Find the first free block
     int block;
@@ -104,6 +110,10 @@ int getFreeBlock() {
         if (block != 0) {
             // Set the location in the freeblock list to 0
             FS.freeBlocks[i] = 0;
+
+            // Write the free block back to disk
+            lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
+            write(pFD, (void*)&FS, sizeof(FS));
             
             // Return the pointer to that block given
             return block;
@@ -124,7 +134,11 @@ int getFreeBlock() {
 
         // Read the next freeBlock and put it in FS
         read(pFD, (void*)&FS, sizeof(FS));
-        
+       
+        // Write the SB back to the file
+        lseek(pFD, 0, SEEK_SET);
+        write(pFD, (void*)&SB, sizeof(SB));
+
         // Return the block
         return block;
     }
@@ -132,6 +146,8 @@ int getFreeBlock() {
 
 
 // Adds a block back to the free space
+// Finds the first open block and puts the corresponding "pointer" there
+// If all blocks are full, it will create an new empty on and make it the head node
 void giveBackBlock(int blk) {
     // Try to find a spot in the current first free block
     int block;
@@ -140,17 +156,25 @@ void giveBackBlock(int blk) {
         block = FS.freeBlocks[i];
         if (block == 0) {
             ifStatement = 1;
+            // Put the pointer in the freeblock
             FS.freeBlocks[i] = blk;
+            
+            // Write the freeblock to disk
+            lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
+            write(pFD, (void*)&FS ,sizeof(FS)); 
+
+            // Break so the function stops
             break;
         }
     }
     
     // Else create a new free block node and put it in the list
     if (ifStatement == 0) {
+        // Variables to put in the new node
         uint16_t nextFree = SB.firstFreeList; 
         uint16_t freeList[255];
 
-        // Fill the free list with zeros
+        // Fill the free list with zeros to put in the new node
         for (uint16_t i = 0; i < 255; i++) {
             freeList[i] = 0;
         }
@@ -161,13 +185,30 @@ void giveBackBlock(int blk) {
         newFree.nextFreeSpaceBlock = nextFree;
         
         // Write the node to the file
+        lseek(pFD, blk*blockSize, SEEK_SET);
         write(pFD, (void*)&newFree, sizeof(newFree));
 
         // Rearange the head pointer to point to the new block
         SB.firstFreeList = blk;
+        
+        // Write the SB back to the file
+        lseek(pFD, 0, SEEK_SET);
+        write(pFD, (void*)&SB, sizeof(SB));
     }
 }
 
+
+// Finds the 
+
+int findFileDesc(const char *fileName) {
+    // Search through the Inodes to see if any of them have the name passed to this funciton
+    for (int i = 0; i < maxFiles; i++) {
+        
+    }
+
+    // Otherwise return -1 to signify not found
+    return -1;
+}
 
 /*
  * int bvfs_init(const char *fs_fileName);
@@ -279,7 +320,7 @@ int bvfs_init(const char *fs_fileName) {
         }
         // Make sure all free spaces after the last free node are accounted for
         // I fixed this issue by seeking to the end of the file and writing a zero
-        uint8_t extra = 0;
+        char extra[1];
         lseek(pFD, 8388607, SEEK_SET);
         write(pFD, (void*)&extra, sizeof(extra));
 
@@ -342,7 +383,8 @@ int BVFS_WTRUNC = 2;
  *
  * This function is intended to open a file in either read or write mode. The
  * above modes identify the method of access to utilize. If the file does not
- * exist, you will create it. The function should return a bvfs file descriptor
+ * exist, you will create it, unless its read-only more. 
+ * The function should return a bvfs file descriptor
  * for the opened file which may be later used with bvfs_(close/write/read).
  *
  * Input Parameters
@@ -362,6 +404,7 @@ int BVFS_WTRUNC = 2;
 int bvfs_open(const char *fileName, int mode) {
     if (inited == 1) {
         // First check to see if the file exists yet or not
+
         
         // Now check the mode
         if (mode == 0) {
