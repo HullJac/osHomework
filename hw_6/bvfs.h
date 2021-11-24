@@ -40,13 +40,15 @@
 
 // Struct to represent the Inodes in this file system
 struct Inode { //TODO Add more stuff to this struct
-    char name[32];
-    uint8_t fd;
-    uint8_t numBlocks;
-    uint32_t numBytes;
+    char name[32];          // Name of the file
+    uint8_t fd;             // ID of the file is one more than the nodes place in the array
+    uint8_t numBlocks;      // Number of blocks in the file
+    uint8_t opened;         // Int to determine how file is open 
+    // 0 = closed, 1 = read, 2 = append, 3 = truncate
+    uint32_t numBytes;      // Bytes in the file
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
     // Meaning I need to multiply by blockSize to get actual location
-    time_t lastModTime;
+    time_t lastModTime;     // Last time anything happened to the file
     char padding[208]; // Extra padding to fill the block size
 
 } typedef Inode;
@@ -54,7 +56,7 @@ struct Inode { //TODO Add more stuff to this struct
 
 // Struct to represent the one super block in this file system
 struct superBlock { //TODO possibly add more stuff here
-    uint16_t remainingFiles;
+    uint16_t remainingFiles; 
     uint16_t firstFreeList; // Represented as an index of blocks
     // Add file descriptors here
     char padding[508]; // Extra padding to fill the block size
@@ -102,11 +104,10 @@ void bvfs_ls();
 // Returns a pointer to that block
 // If needed, will move to the next free block and return the address
 // of the empty free block while change the head pointer of the free block list
-int getFreeBlock() {
+uint16_t getFreeBlock() {
     // Find the first free block
-    int block;
-    int i = 0;
-    for (i; i < 255; i++) {
+    uint16_t block;;
+    for (uint16_t i = 0; i < 255; i++) {
         block = FS.freeBlocks[i];
         if (block != 0) {
             // Set the location in the freeblock list to 0
@@ -201,7 +202,6 @@ void giveBackBlock(int blk) {
 
 // Finds the corresponding file descriptor given a file name
 int findFileDesc(const char *fileName) {
-
     // Search through the Inodes to see if any of them have the name passed to this funciton
     for (int i = 0; i < maxFiles; i++) {
         if (INList[i].name == fileName) {
@@ -210,6 +210,21 @@ int findFileDesc(const char *fileName) {
     }
 
     // Otherwise return -1 to signify not found
+    return -1;
+}
+
+
+// Finds the first open Inode
+// Returns the index into the Inode array
+int findFreeFile() {
+    // Search through the Inodes to see if any of them are free
+    for (int i = 0; i < maxFiles; i++) {
+        if (INList[i].lastModTime == 0) {
+            return i;
+        }
+    }
+
+    // Otherwise return -1 to signify all files are taken
     return -1;
 }
 
@@ -242,7 +257,7 @@ int findFileDesc(const char *fileName) {
  *           etc.). Also, print a meaningful error to stderr prior to returning.
  */
 int bvfs_init(const char *fs_fileName) {
-    int pFD = open(fs_fileName, O_CREAT | O_RDWR | O_EXCL, 0644); // Last parameter is permissions
+    pFD = open(fs_fileName, O_CREAT | O_RDWR | O_EXCL, 0644); // Last parameter is permissions
     if (pFD < 0) {
         if (errno == EEXIST) { // File already exists. 
             // Open it and read data for in-memory data structures 
@@ -251,11 +266,15 @@ int bvfs_init(const char *fs_fileName) {
             // Read the super block
             read(pFD, (void*)&SB, sizeof(SB));
             printf("Read from file: %d + %d + [%s]\n", SB.remainingFiles, SB.firstFreeList, SB.padding);
+
+            Inode no;
+            read(pFD, (void*)&no, sizeof(no));
+            printf("Inode: %ld\n", no.lastModTime);
             
             // Grab the Inode list and store it in memory
             lseek(pFD, blockSize, SEEK_SET);
             read(pFD, (void*)&INList ,sizeof(INList));
-            //FIXME double check if this works. It should but just check anyway
+            printf("Time from first Inode in list: %ld\n", INList[0].lastModTime);
 
             // Seek to where the first free block is
             lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
@@ -266,6 +285,8 @@ int bvfs_init(const char *fs_fileName) {
             
             // Set inited to true
             inited = 1;
+
+            return 0;
 
         }
         else {
@@ -280,22 +301,22 @@ int bvfs_init(const char *fs_fileName) {
         // File did not previously exist but it does now. Write needed meta data to it
         
         // Create and write the inital super block
-        superBlock SB = {256, 257, 0};
-        //printf("super block: %ld\n", sizeof(SB));
-        write(pFD, (void*)&SB, sizeof(SB));
+        superBlock super = {256, 257, 0};
+        //printf("super block: %ld\n", sizeof(super));
+        write(pFD, (void*)&super, sizeof(super));
 
         // Create an array of Inodes
-        Inode IN = {0,0,0,0,0,0,0};
+        Inode IN = {0,0,0,0,0,0,0,0};
         //printf("inode: %ld\n", sizeof(IN));
-        Inode INlist [256];
+        Inode Ilst [256];
         
         // Write empty Inode blocks to array
         for (int i = 0; i < 256; i++) {
-            INlist[i] = IN;
+            Ilst[i] = IN;
         }
 
         // Write Inode array to partition
-        write(pFD, (void*)INlist, sizeof(INlist));        
+        write(pFD, (void*)Ilst, sizeof(Ilst));        
         
         // Create and fill array to store in freeSpace struct 
         uint16_t freeSpot = 258;
@@ -338,15 +359,22 @@ int bvfs_init(const char *fs_fileName) {
         lseek(pFD, 8388607, SEEK_SET);
         write(pFD, (void*)&extra, sizeof(extra));
 
+        // Assign all the needed global variables
+        // These should all be in order on a new init
+        // So, only need to seek to the front of the file
+        lseek(pFD, 0, SEEK_SET);
+        read(pFD, (void*)&SB, sizeof(SB));
+        read(pFD, (void*)&INList, sizeof(INList));
+        read(pFD, (void*)&FS, sizeof(FS));
+
         // Let the user know that the partition was created
         printf("Created Partition: %s\n", fs_fileName);
 
         // Set inited to true
         inited = 1;
 
+        return 0;
     }
-
-    return 0;
 }
 
 
@@ -419,53 +447,96 @@ int bvfs_open(const char *fileName, int mode) {
     if (inited == 1) {
         // First check to see if the file exists yet or not
         int fileDescriptor = findFileDesc(fileName);
-        if (fileDescriptor != -1) {
+
+        // Index to access the Inode array
+        int index = fileDescriptor - 1;
+
+        // Check if the file exists 
+        // That means the number given above is not equal to -1
+        if (fileDescriptor != -1) { 
+            // Check if the file is aready open
+            if (INList[index].opened > 0) {
+                fprintf(stderr, "The file %s is already open.", fileName);
+                return -1;
+            }
+
             // Now check the mode
-            if (mode == 0) {
-                return 0;
+            if (mode == BVFS_RDONLY) {
+
+                return fileDescriptor;
             }
-            else if (mode == 1) {
-                return 0;
+
+            else if (mode == BVFS_WAPPEND) {
+                return fileDescriptor;
             }
+
             else if (mode == BVFS_WTRUNC) {
-               return 0; 
+               return fileDescriptor; 
             }
+
+            // Error because that is not a vaild open mode
             else {
                 fprintf(stderr, "That is not a valid mode: %d", mode);
                 return -1;
             }
         }
 
-        // Check if the mode is a write and not read
+        // Check if the mode is a write and not read and if there is a free file
         else {
+            // Check if there is a free file first
+            int isFree = findFreeFile();
+            if (isFree == -1) {
+                fprintf(stderr, "There are no free files left.");
+                return -1;
+            }
+
             // If it's readonly mode print to std error and return -1
-            if (mode == BVFS_RDONL) {
+            else if (mode == BVFS_RDONLY) {
                 fprintf(stderr, "You cannot open a new file in read only mode.");
                 return -1;
             }
-            // If it's write, create the file and write the stuff
-            else {
-                // TODO Create the file
-                
-                //FIXME not sure if I need both of these modes here since its a new file
-                // If the mode is append
-                // TODO write this
-                if (mode == BVFS_WAPPEND) {
-                    
-                }
-                // TODO write this
-                else if (mode == BVFS_WTRUNC) {
 
-                }
-                // Error because this is a bad input
-                else {
-                    fprintf(stderr, "That is not a valid mode to open a file with.");
-                    return -1;
-                }
+            // If it's write, create the file and write the stuff
+            else if (mode == BVFS_WAPPEND || mode == BVFS_WTRUNC) {
+                // Set the isFree to the fileDescriptor and the correct value (+1)
+                fileDescriptor = (isFree + 1);
+
+                // Get the block where the data for this file will live
+                uint16_t firstBlock = getFreeBlock();
+                uint16_t addresses[128];
+                addresses[0] = firstBlock;
+
+                // Create the Inode
+                Inode newNode = {.fd = fileDescriptor,
+                                 .numBlocks = 1,
+                                 .opened = 2,
+                                 .numBytes = 0,
+                                 .lastModTime = time(NULL),
+                                 .padding = 0
+                };
+
+                // Copy the arrays over
+                strcpy(newNode.name, fileName);
+                memcpy(newNode.dataBlockAddresses, addresses, sizeof(addresses));
+
+                // Write the new file to the Inode list in the partiton
+                // Do not need to subtract from file descriptor here 
+                // because it helps account for the super block
+                lseek(pFD, fileDescriptor*blockSize, SEEK_SET);
+                write(pFD, (void*)&newNode, sizeof(newNode));
+
+                // Return successfully
+                return fileDescriptor;
             }
 
+            // Error because that is not a vaild open mode
+            else {
+                fprintf(stderr, "That is not a valid mode to open a file with.");
+                return -1;
+            }
         }
     }
+
     else {
         fprintf(stderr, "bvfs_init was never called.");
         return -1;
@@ -495,6 +566,7 @@ int bvfs_open(const char *fileName, int mode) {
  *           prior to returning.
  */
 int bvfs_close(int bvfs_FD) {
+    int index = bvfs_FD - 1;
 }
 
 
@@ -521,6 +593,7 @@ int bvfs_close(int bvfs_FD) {
  *           prior to returning.
  */
 int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
+    int index = bvfs_FD - 1;
 }
 
 
@@ -546,6 +619,7 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
  *           prior to returning.
  */
 int bvfs_read(int bvfs_FD, void *buf, size_t count) {
+    int index = bvfs_FD - 1;
 }
 
 
