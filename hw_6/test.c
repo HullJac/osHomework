@@ -19,17 +19,12 @@ int main(int argc, char** argv) {
 
     int in = bvfs_init(partitionName);
     printf("init: %d\n", in);
-    fflush(stdout);
 
     int fd = bvfs_open("file", BVFS_WTRUNC);
     printf("open: %d\n", fd);
-    fflush(stdout);
 
-    /*
     int det = bvfs_detach();
     printf("detatch: %d\n", det);
-
-    */
 
     //bvfs_open("firstFile", BVFS_WTRUNC);
 
