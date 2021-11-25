@@ -64,12 +64,13 @@ struct superBlock { //TODO possibly add more stuff here
 } typedef superBlock;
 
 
-//Struct to represent the empty space
+// Struct to represent the empty space
 struct freeSpace {
     uint16_t freeBlocks[255];
     uint16_t nextFreeSpaceBlock;
 
 } typedef freeSpace;
+
 
 
 //** Global Variables **//
@@ -81,6 +82,7 @@ uint16_t maxFiles = 256;        // Max number of files that can be stored in fil
 superBlock SB;                  // Super block to manipulate later
 freeSpace FS;                   // First free space block 
 Inode INList[256];              // Inode list to store all inodes
+freeSpace emptyBlock = {0, 0};  // Empty struct to use when reclaiming space 
 int pFD;                        // Make the file descriptor global
 
 
@@ -103,7 +105,7 @@ void bvfs_ls();
 // Sets that address to taken
 // Returns a pointer to that block
 // If needed, will move to the next free block and return the address
-// of the empty free block while change the head pointer of the free block list
+// of the empty free block while changing the head pointer of the free block list
 uint16_t getFreeBlock() {
     // Find the first free block
     uint16_t block;;
@@ -165,6 +167,10 @@ void giveBackBlock(int blk) {
             lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
             write(pFD, (void*)&FS ,sizeof(FS)); 
 
+            // Write over the block given back
+            lseek(pFD, blk*blockSize, SEEK_SET);
+            write(pFD, (void*)&emptyBlock, sizeof(emptyBlock));
+
             // Break so the function stops
             break;
         }
@@ -172,8 +178,7 @@ void giveBackBlock(int blk) {
     
     // Else create a new free block node and put it in the list
     if (ifStatement == 0) {
-        // Variables to put in the new node
-        uint16_t nextFree = SB.firstFreeList; 
+        // List of free spaces to put in the new node which is empty
         uint16_t freeList[255];
 
         // Fill the free list with zeros to put in the new node
@@ -184,9 +189,10 @@ void giveBackBlock(int blk) {
         // Create node and add stuff to it
         freeSpace newFree;
         memcpy(newFree.freeBlocks, freeList, sizeof(freeList));
-        newFree.nextFreeSpaceBlock = nextFree;
+        newFree.nextFreeSpaceBlock = SB.firstFreeList;
         
-        // Write the node to the file
+        // Write the node to the file at the block given back
+        // So, no need to overwrite the block given back this will
         lseek(pFD, blk*blockSize, SEEK_SET);
         write(pFD, (void*)&newFree, sizeof(newFree));
 
@@ -333,9 +339,9 @@ int bvfs_init(const char *fs_fileName) {
         }
 
         // Write Inode array to partition
-        // FIXME I change this from just a void to a void* &
-        write(pFD, (void*)&Ilst, sizeof(Ilst));        
-        
+        write(pFD, (void*)&Ilst, sizeof(Ilst));
+        //TODO check and make sure this doesnt need to be (void) and not (void*)&
+
         // Create and fill array to store in freeSpace struct 
         uint16_t freeSpot = 258;
         uint16_t freeList[255];
@@ -483,25 +489,59 @@ int bvfs_open(const char *fileName, int mode) {
             }
 
             // Now check the mode
+
+            // Just open the file to read 
             if (mode == BVFS_RDONLY) {
-
-                return fileDescriptor;
+                INList[index].opened = 1;
             }
 
+            // Open the file so it is prepared to write to the end of it
             else if (mode == BVFS_WAPPEND) {
-                return fileDescriptor;
+                INList[index].opened = 2;
             }
 
+            // Open the file and delete everything in it
             else if (mode == BVFS_WTRUNC) {
-               return fileDescriptor; 
-            }
+                INList[index].opened = 3;
+                
+                // Delete everything from the file
+                for(int i = 0; i < INList[index].numBlocks; i++) {
+                    int deleteBlock = INList[index].dataBlockAddresses[i];
+                    giveBackBlock(deleteBlock);
+                }
 
+                // Create new data block address list and put it in the Inode
+                uint16_t newAddresses[128];
+                
+                // Grab a new block that is empty and put it in the new address list
+                uint16_t newBlock = getFreeBlock();
+                newAddresses[0] = newBlock;
+
+                // Put the new address list in the Inode 
+                memcpy(INList[index].dataBlockAddresses, newAddresses, sizeof(newAddresses));
+
+                // Set the numBlock back to one
+                INList[index].numBlocks = 1;
+
+                // Set the modification time 
+                INList[index].lastModTime = time(NULL);
+            }
+            
             // Error because that is not a vaild open mode
             else {
                 fprintf(stderr, "That is not a valid mode: %d\n", mode);
                 return -1;
             }
+            
+            // Write the INList back to file
+            lseek(pFD, blockSize, SEEK_SET);
+            write(pFD, (void*)&INList, sizeof(INList));
+
+            // Return the proper file descriptor for the file opened
+            return fileDescriptor; 
         }
+
+        //######## Creating the file in open below ########//
 
         // Check if the mode is a write and not read and if there is a free file
         else {
