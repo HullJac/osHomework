@@ -218,6 +218,7 @@ int findFileDesc(const char *fileName) {
     }
 
     // Otherwise return -1 to signify not found
+    fprintf(stderr, "Filename: <%s> not found\n", fileName);
     return -1;
 }
 
@@ -289,11 +290,13 @@ int bvfs_init(const char *fs_fileName) {
 
             // Read the super block
             read(pFD, (void*)&SB, sizeof(SB));
-            printf("Read from file: %d + %d + [%s]\n", SB.remainingFiles, SB.firstFreeList, SB.padding);
+            //printf("Read from file: %d + %d + [%s]\n", SB.remainingFiles, SB.firstFreeList, SB.padding);
             
             // Grab the Inode list and store it in memory
             lseek(pFD, blockSize, SEEK_SET);
             read(pFD, (void*)&INList ,sizeof(INList));
+
+            /*
             printf("First Inode name: <%s>\n", INList[0].name);
             printf("First Inode fd: <%d>\n", INList[0].fd);
             printf("First Inode numBlocks: <%d>\n", INList[0].numBlocks);
@@ -301,13 +304,14 @@ int bvfs_init(const char *fs_fileName) {
             printf("First Inode numBytes: <%d>\n", INList[0].numBytes);
             printf("First Inode time: <%ld>\n", INList[0].lastModTime);
             printf("First Inode dataBlockAddresses[0] <%d>\n", INList[0].dataBlockAddresses[0]);
+            */
 
             // Seek to where the first free block is
             lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
 
             // Read the first freeBlock based on the super block
             read(pFD, (void*)&FS, sizeof(FS));
-            printf("Read from free block: %d + %d\n", FS.freeBlocks[0], FS.nextFreeSpaceBlock);
+            //printf("Read from free block: %d + %d\n", FS.freeBlocks[0], FS.nextFreeSpaceBlock);
             
             // Set inited to true
             inited = 1;
@@ -430,6 +434,8 @@ int bvfs_detach() {
     if (inited == 1) {
         // Close all the files
         closeAllFiles();
+        // Set inited to 0 so nothing works
+        inited = 0;
         return 0;
     }
 

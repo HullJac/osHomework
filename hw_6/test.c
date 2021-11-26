@@ -20,16 +20,18 @@ int main(int argc, char** argv) {
     int in = bvfs_init(partitionName);
     printf("init: %d\n", in);
 
-    int fd = bvfs_open("file", BVFS_WTRUNC);
-    printf("open: %d\n", fd);
+    int f1 = bvfs_open("file1", BVFS_WTRUNC);
+    printf("open file1: %d\n", f1);
 
-    int cl = bvfs_close(fd);
+    int cl = bvfs_close(f1);
     printf("close: %d\n", cl);
+    
+    int f2 = bvfs_open("file2", BVFS_WTRUNC);
+    printf("open file2: %d\n", f2);
 
     int det = bvfs_detach();
     printf("detatch: %d\n", det);
 
-    //bvfs_open("firstFile", BVFS_WTRUNC);
 
 
     return 0;
