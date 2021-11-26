@@ -23,6 +23,9 @@ int main(int argc, char** argv) {
     int fd = bvfs_open("file", BVFS_WTRUNC);
     printf("open: %d\n", fd);
 
+    int cl = bvfs_close(fd);
+    printf("close: %d\n", cl);
+
     int det = bvfs_detach();
     printf("detatch: %d\n", det);
 
