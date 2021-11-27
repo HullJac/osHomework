@@ -17,16 +17,16 @@ int main(int argc, char** argv) {
     // Get partition name from command line argument
     char *partitionName = argv[1];
 
+/////Initing
     int in = bvfs_init(partitionName);
     printf("init: %d\n", in);
 
 /////File1
-
     int f1 = bvfs_open("file1", BVFS_WTRUNC);
     printf("open file1: %d\n", f1);
 
-    char num[10] = "0123456789";
-    int w1 = bvfs_write(f1, num, 5);
+    int num = 123456789;
+    int w1 = bvfs_write(f1, &num, sizeof(num));
     printf("write file1: %d\n", w1);
 
     int cl1 = bvfs_close(f1);
@@ -40,9 +40,10 @@ int main(int argc, char** argv) {
     int cl2 = bvfs_close(f2);
     printf("close file2: %d\n", cl2);
 
+
+/////Detaching
     int det = bvfs_detach();
     printf("detatch: %d\n", det);
-
 
 
     return 0;
