@@ -37,20 +37,25 @@
 //TODO
 //TODO Run this on Kay so that I make sure the blocks are all still 512 and stuff lines up and works
 //TODO
+//
+//
+//TODO Look into why when I run the file the second time, the Inodes get a lot bigger. 
 
 // Struct to represent the Inodes in this file system
 struct Inode {
+    // I decided to make these all 32 bit because it didn't really matter and helped me 
+    // not have to change the padding when I compiled using the make file or my own stuff
     char name[32];          // Name of the file
-    uint8_t fd;             // ID of the file is one more than the nodes place in the array
-    uint8_t numBlocks;      // Number of blocks in the file
-    uint8_t opened;         // Int to determine how file is open 
+    uint32_t fd;             // ID of the file is one more than the nodes place in the array
+    uint32_t numBlocks;      // Number of blocks in the file
+    uint32_t opened;         // Int to determine how file is open 
     // 0 = closed, 1 = read, 2 = append, 3 = truncate
-    uint8_t lastDB;         // Last dataBlock that has free space in dataBlockAddresses
-    uint16_t nextFreeByte;  // Next free byte in the last dataBlock
+    uint32_t lastDB;         // Last dataBlock that has free space in dataBlockAddresses
+    uint32_t nextFreeByte;  // Next free byte in the last dataBlock
     uint32_t numBytes;      // Bytes in the file
-    time_t lastModTime;     // Last time anything happened to the file
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
     // Meaning I need to multiply by blockSize to get actual location
+    time_t lastModTime;     // Last time anything happened to the file
     char padding[196]; // Extra padding to fill the block size
 
 } typedef Inode;
@@ -727,7 +732,6 @@ int bvfs_close(int bvfs_FD) {
  */
 int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
     int index = bvfs_FD - 1;
-//    printf("READING FROM BUFFER: <%s>\n", (char*) buf);
 
     // TODO Think about Checking if we can put all the stuff in the partition
     // Is the partition space left too small?????:w
@@ -751,20 +755,21 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
 
                 // Loop through writing block at a time until all bytes are written
                 int tempCount = count;
-                printf("tempcount: %d\n", tempCount);
                 while (tempCount != 0) {
                     // See how many bytes can fit in the current not full block
                     int freeBytes = blockSize - INList[index].nextFreeByte;
+                    printf("freeBytes: %d\n", freeBytes);
 
                     // If we can fit everything in the current block
                     if (tempCount <= freeBytes) {
 
                         // Seek to the spot to put data and write everything
                         int seekSpot = INList[index].dataBlockAddresses[INList[index].lastDB];
-                        printf("seekspot: %d\n", seekSpot);
+                        printf("seekSpot: %d\n", seekSpot*blockSize);
+                        printf("seekSpot + offset: %d\n", (seekSpot*blockSize) + INList[index].nextFreeByte);
+
+                        printf("nextFreeByte: %d\n", INList[index].nextFreeByte);
                         lseek(pFD, (seekSpot*blockSize) + INList[index].nextFreeByte, SEEK_SET); 
-                        printf("afterseekspot: %d\n", (seekSpot*blockSize) + INList[index].nextFreeByte);
-                        printf("tempcoutn before writing: %d\n", tempCount);
                         write(pFD, buf, tempCount);
 
                         // Update where the nextFreeByte is in the Inode
@@ -853,6 +858,25 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
  */
 int bvfs_read(int bvfs_FD, void *buf, size_t count) {
     int index = bvfs_FD - 1;
+
+    if (inited == 1) {
+        // Check if the file is opened properly
+        if (INList[index].opened == 1) {
+            //TODO implement read 
+
+        }
+
+        // Error that the file is not open or is in read mode
+        else {
+            fprintf(stderr, "The file, <%s>, is not open to read-only mode\n", INList[index].name);
+        }
+    }
+
+    // Error that init was never called
+    else {
+        fprintf(stderr, "bvfs_init was never called.\n");
+        return -1;
+    }
 }
 
 

@@ -7,6 +7,13 @@
 #include <fcntl.h>
 
 #include "bvfs.h"
+///**********************************
+//
+//  MAKE SURE ALL THE WRITING IS NOT SET TO TRUNCATE AND ALWAYS CHECK OTHER 
+//  VARIABLES LIKE THAT IF THEY COULD AFFECT FUNCTIONALITY
+//
+//******************
+
 
 int main(int argc, char** argv) {
     if (argc != 2) {
@@ -22,7 +29,7 @@ int main(int argc, char** argv) {
     printf("init: %d\n", in);
 
 /////File1
-    int f1 = bvfs_open("file1", BVFS_WTRUNC);
+    int f1 = bvfs_open("file1", BVFS_WAPPEND);
     printf("open file1: %d\n", f1);
 
     int num = 123456789;
