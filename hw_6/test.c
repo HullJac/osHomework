@@ -38,6 +38,17 @@ int main(int argc, char** argv) {
 
     int cl1 = bvfs_close(f1);
     printf("close file1: %d\n", cl1);
+
+    int f1op = bvfs_open("file1", BVFS_RDONLY);
+    printf("open file1 readonly: %d\n", f1op);
+
+    int readNum;
+    int read1 = bvfs_read(f1op, &readNum, sizeof(readNum));
+    printf("read1: %d\n", read1);
+    printf("value of read1: %d\n", readNum);
+
+    cl1 = bvfs_close(f1op);
+    printf("close fie1 again: %d\n", cl1);
     
 /////File 2
 

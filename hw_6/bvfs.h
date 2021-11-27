@@ -278,6 +278,27 @@ void closeAllFiles() {
 }
 
 
+// Finds the index of all the files present
+int* findAllFiles() {
+    // Create a static array to reference
+    static int files[256];
+
+    // Index to add stuff to the files array at
+    int fIndex = 0;
+
+    // Search through all the Inodes to see if any have files in them
+    for (int i = 0; i < maxFiles; i++) {
+        if (INList[i].lastModTime != 0) {
+            files[fIndex] = i;
+            fIndex = fIndex + 1;
+        }
+    }
+
+    // Return the pointer to the array
+    return files;
+}
+
+
 
 
 
@@ -732,6 +753,7 @@ int bvfs_close(int bvfs_FD) {
  */
 int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
     int index = bvfs_FD - 1;
+    int tempCount = count;
 
     // TODO Think about Checking if we can put all the stuff in the partition
     // Is the partition space left too small?????:w
@@ -754,7 +776,6 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                 }
 
                 // Loop through writing block at a time until all bytes are written
-                int tempCount = count;
                 while (tempCount != 0) {
                     // See how many bytes can fit in the current not full block
                     int freeBytes = blockSize - INList[index].nextFreeByte;
@@ -824,6 +845,7 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
         // Error that the file is not open or is in read mode
         else {
             fprintf(stderr, "The file, <%s>, is not open or is in read only mode\n", INList[index].name);
+            return -1;
         }
     }
 
@@ -858,17 +880,61 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
  */
 int bvfs_read(int bvfs_FD, void *buf, size_t count) {
     int index = bvfs_FD - 1;
+    int tempCount = count;
 
     if (inited == 1) {
         // Check if the file is opened properly
         if (INList[index].opened == 1) {
-            //TODO implement read 
+            //TODO see if there is enough stuff to read from the file
+            //That is, does the file have enough data in it
 
+            // Int to keep track of which block we are reading from
+            int blk = 0;
+
+            //Find where the first block of info is in the file
+            int firstBlock = INList[index].dataBlockAddresses[blk];
+
+            // Seek to the block found above
+            lseek(pFD, firstBlock*blockSize, SEEK_SET);
+            
+            while (tempCount != 0) {
+                // See if we have to read more than 1 block of bytes
+                // If we do, read entire block and seek to the next
+                if (tempCount > 512) {
+                    // Increment the blk to grab
+                    blk = blk + 1;
+
+                    // Read blockSize bytes to the buffer 
+                    read(pFD, buf, blockSize);
+
+                    // Decrement the tempCounter so we know how many bytes are left to read
+                    tempCount = tempCount - blockSize;
+
+                    // Increment the place in the buffer to put the data
+                    buf = buf + 512;
+
+                    // Seek to the next block
+                    int nextBlock = INList[index].dataBlockAddresses[blk];
+                    lseek(pFD, nextBlock*blockSize, SEEK_SET);
+                }
+
+                // Read what is left
+                else {
+                    // Read in what is left to the buffer
+                    read(pFD, buf, tempCount);
+                    // Set tempCount to 0 to break the loop
+                    tempCount = 0;
+                }
+            }
+
+            //Return the number of bytes read
+            return count;
         }
 
         // Error that the file is not open or is in read mode
         else {
             fprintf(stderr, "The file, <%s>, is not open to read-only mode\n", INList[index].name);
+            return -1;
         }
     }
 
@@ -937,4 +1003,29 @@ int bvfs_unlink(const char* fileName) {
  *   void
  */
 void bvfs_ls() {
+    // Calculate and print the number of files in the file system
+    int numFiles = maxFiles - SB.remainingFiles;
+    printf(" | %d Files\n", numFiles);
+   
+    // Create and array containing all the file indexes
+
+    // Create an array to reference
+    int files[256];
+
+    // Index to add stuff to the files array at
+    int fIndex = 0;
+
+    // Search through all the Inodes to see if any have files in them
+    for (int i = 0; i < maxFiles; i++) {
+        if (INList[i].lastModTime != 0) {
+            files[fIndex] = i;
+            fIndex = fIndex + 1;
+        }
+    }
+
+    // Loop numFiles times printing out info of each file
+    for (int i = 0; i < numFiles; i++) {
+        int index = files[i];
+        printf(" | bytes: %d, blocks: %d, %s, %s\n", bytes, blocks, ctime(&))
+    }
 }
