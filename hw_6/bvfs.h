@@ -44,22 +44,24 @@ struct Inode { //TODO Add more stuff to this struct
     uint8_t fd;             // ID of the file is one more than the nodes place in the array
     uint8_t numBlocks;      // Number of blocks in the file
     uint8_t opened;         // Int to determine how file is open 
+    uint8_t lastDB;         // Last dataBlock that has free space in dataBlockAddresses
+    uint16_t nextFreeByte;  // Next free byte in the last dataBlock
     // 0 = closed, 1 = read, 2 = append, 3 = truncate
     uint32_t numBytes;      // Bytes in the file
     time_t lastModTime;     // Last time anything happened to the file
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
     // Meaning I need to multiply by blockSize to get actual location
-    char padding[208]; // Extra padding to fill the block size
+    char padding[204]; // Extra padding to fill the block size
 
 } typedef Inode;
 
 
 // Struct to represent the one super block in this file system
 struct superBlock { //TODO possibly add more stuff here
-    uint16_t remainingFiles; 
-    uint16_t firstFreeList; // Represented as an index of blocks
-    // Add file descriptors here
-    char padding[508]; // Extra padding to fill the block size
+    uint16_t remainingFiles;    // Number of files left
+    uint16_t firstFreeList;     // Represented as an index of blocks
+    uint32_t remainingBlocks;   // Number of blocks left
+    char padding[504];          // Extra padding to fill the block size
 
 } typedef superBlock;
 
@@ -79,7 +81,7 @@ uint16_t blockSize = 512;       // Reference to size of block in our file system
 uint16_t maxFreeBlocks = 63;    // Most Free node we can have hard coded sadly
 uint16_t maxBlocks = 16384;     // Max number of block available in file system
 uint16_t maxFiles = 256;        // Max number of files that can be stored in file system
-int maxFileBlocks = 65536;      // Max number of block per file
+int maxFileBytes = 65536;       // Max number of bytes per file
 superBlock SB;                  // Super block to manipulate later
 freeSpace FS;                   // First free space block 
 Inode INList[256];              // Inode list to store all inodes
@@ -108,14 +110,25 @@ void bvfs_ls();
 // Returns a pointer to that block
 // If needed, will move to the next free block and return the address
 // of the empty free block while changing the head pointer of the free block list
-uint16_t getFreeBlock() {
+uint16_t getFreeBlock() { //TODO check places this is called to make sure it doesn't get -1
+    // First check to see if there are nay free blocks available
+    if (SB.remainingBlocks == 0) {
+        fprintf(stderr, "There are no more free block to give.");
+        return -1;
+    }
+
     // Find the first free block
-    uint16_t block;;
+    uint16_t block;
     for (uint16_t i = 0; i < 255; i++) {
         block = FS.freeBlocks[i];
         if (block != 0) {
             // Set the location in the freeblock list to 0
             FS.freeBlocks[i] = 0;
+            
+            // Update the super block count
+            SB.remainingBlocks = SB.remainingBlocks - 1;
+            lseek(pFD, 0, SEEK_SET);
+            write(pFD, (void*)&SB, sizeof(SB));
 
             // Write the free block back to disk
             lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
@@ -132,7 +145,7 @@ uint16_t getFreeBlock() {
         // This will be the block that we give them to use
         block = SB.firstFreeList; 
         
-        // Reset superBlock
+        // Reset superBlock pointer
         SB.firstFreeList = FS.nextFreeSpaceBlock;
         
         // Seek to the next freeSpace block
@@ -164,6 +177,11 @@ void giveBackBlock(int blk) {
             ifStatement = 1;
             // Put the pointer in the freeblock
             FS.freeBlocks[i] = blk;
+
+            // Update the super block count
+            SB.remainingBlocks = SB.remainingBlocks + 1;
+            lseek(pFD, 0, SEEK_SET);
+            write(pFD, (void*)&SB, sizeof(SB));
             
             // Write the freeblock to disk
             lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
@@ -290,7 +308,7 @@ int bvfs_init(const char *fs_fileName) {
 
             // Read the super block
             read(pFD, (void*)&SB, sizeof(SB));
-            //printf("Read from file: %d + %d + [%s]\n", SB.remainingFiles, SB.firstFreeList, SB.padding);
+            //printf("Read from file: %d + %d + %d + [%s]\n", SB.remainingFiles, SB.firstFreeList, SB.remainingBlocks SB.padding);
             
             // Grab the Inode list and store it in memory
             lseek(pFD, blockSize, SEEK_SET);
@@ -301,6 +319,8 @@ int bvfs_init(const char *fs_fileName) {
             printf("First Inode fd: <%d>\n", INList[0].fd);
             printf("First Inode numBlocks: <%d>\n", INList[0].numBlocks);
             printf("First Inode opened: <%d>\n", INList[0].opened);
+            printf("First Inode lastBD: <%d>\n", INList[0].lastBD);
+            printf("First Inode nextFreeByte: <%d>\n", INList[0].nextFreeByte);
             printf("First Inode numBytes: <%d>\n", INList[0].numBytes);
             printf("First Inode time: <%ld>\n", INList[0].lastModTime);
             printf("First Inode dataBlockAddresses[0] <%d>\n", INList[0].dataBlockAddresses[0]);
@@ -331,12 +351,13 @@ int bvfs_init(const char *fs_fileName) {
         // File did not previously exist but it does now. Write needed meta data to it
         
         // Create and write the inital super block
-        superBlock super = {256, 257, 0};
+        uint32_t numRemBlocks = 16384 - 1 - maxFiles - maxFreeBlocks;
+        superBlock super = {256, 257, numRemBlocks, 0};
         //printf("super block: %ld\n", sizeof(super));
         write(pFD, (void*)&super, sizeof(super));
 
         // Create an array of Inodes
-        Inode IN = {0,0,0,0,0,0,0,0};
+        Inode IN = {0,0,0,0,0,0,0,0,0,0};
         //printf("inode: %ld\n", sizeof(IN));
         Inode Ilst [256];
         
@@ -521,6 +542,11 @@ int bvfs_open(const char *fileName, int mode) {
                     giveBackBlock(deleteBlock);
                 }
 
+                // Update the super block in the partition
+                SB.remainingBlocks = SB.remainingBlocks + (INList[index].numBlocks - 1); 
+                lseek(pFD, 0, SEEK_SET);
+                write(pFD, (void*)&SB, sizeof(SB));
+
                 // Create new data block address list to be put in the Inode
                 uint16_t newAddresses[128];
                 
@@ -587,6 +613,8 @@ int bvfs_open(const char *fileName, int mode) {
                 Inode newNode = {.fd = fileDescriptor,
                                  .numBlocks = 1,
                                  .opened = 2,
+                                 .lastDB = 0,
+                                 .nextFreeByte = 0,
                                  .numBytes = 0,
                                  .lastModTime = time(NULL),
                 };
@@ -604,6 +632,9 @@ int bvfs_open(const char *fileName, int mode) {
 
                 // Update the super block
                 SB.remainingFiles = SB.remainingFiles - 1;
+                SB.remainingBlocks = SB.remainingBlocks - 1;
+
+                // Update the super block in the partition
                 lseek(pFD, 0, SEEK_SET);
                 write(pFD, (void*)&SB, sizeof(SB));
 
@@ -698,22 +729,44 @@ int bvfs_close(int bvfs_FD) {
  */
 int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
     int index = bvfs_FD - 1;
+    buf = buf + 1;
+    printf("READING FROM BUFFER: <%s>\n", (char*) buf);
+
+    return 0;
+    /*
+    // TODO Think about Checking if we can put all the stuff in the partition
 
     if (inited == 1) {
         // Check if the file is opened properly
         if (INList[index].opened == 2 || INList[index].opened == 3) {
             // Check if we can fit the stuff in the file
-            // Adde a one to maxFileBlocks to account for last byte in 
-            if (((maxFileBlocks + 1) - INList[index].numBytes) <= count) {
+            if ((maxFileBytes - INList[index].numBytes) >= count) {
+                // Start to write the bytes to the file
+
+                // Loop through writing block at a time until all bytes are written
+                int tempCount = count;
+                while (tempCount != 0) {
+                    // See how many bytes can fit in the current not full block
+                    int freeBytes = blockSize - INList[index].nextFreeByte;
+                    // If we can fit everything in the current block
+                    if (count <= freeBytes) {
+                        //TODO
+                        break;
+                    }
+                    else {
+                        // TODO
+                    }
+
+                }
+                // Return the number of bytes written 
                 return (int)count;
             }
 
             // Error that stuff to write is not going to fit.
             else {
-                fprintf(stderr, "This file does not have room fo that  amount of bytes\n.");
+                fprintf(stderr, "This file does not have room for that amount of bytes\n.");
                 return -1;
             }
-
         }
 
         // Error that the file is not open or is in read mode
@@ -727,6 +780,8 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
         fprintf(stderr, "bvfs_init was never called.\n");
         return -1;
     }
+
+    */
 }
 
 
@@ -777,6 +832,7 @@ int bvfs_read(int bvfs_FD, void *buf, size_t count) {
  *           Also, print a meaningful error to stderr prior to returning.
  */
 int bvfs_unlink(const char* fileName) {
+    //Decrement SB.remaining files and blocks
 }
 
 
