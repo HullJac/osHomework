@@ -39,7 +39,7 @@
 //TODO
 
 // Struct to represent the Inodes in this file system
-struct Inode { //TODO Add more stuff to this struct
+struct Inode {
     char name[32];          // Name of the file
     uint8_t fd;             // ID of the file is one more than the nodes place in the array
     uint8_t numBlocks;      // Number of blocks in the file
@@ -52,13 +52,12 @@ struct Inode { //TODO Add more stuff to this struct
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
     // Meaning I need to multiply by blockSize to get actual location
     char padding[196]; // Extra padding to fill the block size
-    //TODO check to make sure this is still 512
 
 } typedef Inode;
 
 
 // Struct to represent the one super block in this file system
-struct superBlock { //TODO possibly add more stuff here
+struct superBlock {
     uint16_t remainingFiles;    // Number of files left
     uint16_t firstFreeList;     // Represented as an index of blocks
     uint32_t remainingBlocks;   // Number of blocks left
@@ -759,26 +758,24 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
 
                     // If we can fit everything in the current block
                     if (tempCount <= freeBytes) {
-                        // Set tempCount to break the loop
-                        tempCount = 0;
 
                         // Seek to the spot to put data and write everything
                         int seekSpot = INList[index].dataBlockAddresses[INList[index].lastDB];
                         printf("seekspot: %d\n", seekSpot);
                         lseek(pFD, (seekSpot*blockSize) + INList[index].nextFreeByte, SEEK_SET); 
                         printf("afterseekspot: %d\n", (seekSpot*blockSize) + INList[index].nextFreeByte);
+                        printf("tempcoutn before writing: %d\n", tempCount);
                         write(pFD, buf, tempCount);
-                        //FIXME not actually writing the data to the file
 
                         // Update where the nextFreeByte is in the Inode
-                        INList[index].nextFreeByte = INList[index].nextFreeByte + count;
+                        INList[index].nextFreeByte = INList[index].nextFreeByte + tempCount;
+                        
+                        // Set tempCount to break the loop
+                        tempCount = 0;
                     }
 
                     // We cannot fit everything in the current block
                     else {
-                        // Set tempcount down the number of bytes being written
-                        tempCount = tempCount - freeBytes;
-
                         // Write as much as the block can hold
                         int seekSpot = INList[index].dataBlockAddresses[INList[index].lastDB];
                         lseek(pFD, (seekSpot*blockSize) + INList[index].nextFreeByte, SEEK_SET); 
@@ -794,6 +791,9 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                         INList[index].nextFreeByte = 0;
                         INList[index].lastDB = INList[index].lastDB + 1;
                         INList[index].dataBlockAddresses[INList[index].lastDB] = newBlock;
+                        
+                        // Set tempcount down the number of bytes being written
+                        tempCount = tempCount - freeBytes;
                     }
 
                 }
