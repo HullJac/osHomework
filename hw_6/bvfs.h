@@ -46,7 +46,7 @@ struct Inode {
     // I decided to make these all 32 bit because it didn't really matter and helped me 
     // not have to change the padding when I compiled using the make file or my own stuff
     char name[32];          // Name of the file
-    uint32_t fd;             // ID of the file is one more than the nodes place in the array
+    uint32_t fd;             // ID of the file is also the same as the place in the Inode list
     uint32_t numBlocks;      // Number of blocks in the file
     uint32_t opened;         // Int to determine how file is open 
     // 0 = closed, 1 = read, 2 = append, 3 = truncate
@@ -538,7 +538,7 @@ int bvfs_open(const char *fileName, int mode) {
         //printf("fileDescriptor in open: %d\n", fileDescriptor);
 
         // Index to access the Inode array
-        int index = fileDescriptor - 1;
+        int index = fileDescriptor;
 
         // Check if the file exists 
         // That means the number given above is not equal to -1
@@ -570,11 +570,6 @@ int bvfs_open(const char *fileName, int mode) {
                     int deleteBlock = INList[index].dataBlockAddresses[i];
                     giveBackBlock(deleteBlock);
                 }
-
-                // Update the super block in the partition
-                SB.remainingBlocks = SB.remainingBlocks + (INList[index].numBlocks - 1); 
-                lseek(pFD, 0, SEEK_SET);
-                write(pFD, (void*)&SB, sizeof(SB));
 
                 // Create new data block address list to be put in the Inode
                 uint16_t newAddresses[128];
@@ -630,7 +625,7 @@ int bvfs_open(const char *fileName, int mode) {
             // If it's write, create the file and write the stuff
             else if (mode == BVFS_WAPPEND || mode == BVFS_WTRUNC) {
                 // Set the isFree to the fileDescriptor and the correct value (+1)
-                fileDescriptor = (isFree + 1);
+                uint32_t fileDescriptor = isFree;
 
                 // Get the block where the data for this file will live
                 uint16_t firstBlock = getFreeBlock();
@@ -652,7 +647,7 @@ int bvfs_open(const char *fileName, int mode) {
                 memcpy(newNode.dataBlockAddresses, addresses, sizeof(addresses));
                 
                 // Add the node to the INList
-                INList[fileDescriptor - 1] = newNode;
+                INList[fileDescriptor] = newNode;
 
                 // Write the new updated Inode list to the partiton
                 lseek(pFD, blockSize, SEEK_SET);
@@ -708,7 +703,7 @@ int bvfs_open(const char *fileName, int mode) {
  *           prior to returning.
  */
 int bvfs_close(int bvfs_FD) {
-    int index = bvfs_FD - 1;
+    int index = bvfs_FD;
 
     if (inited == 1) {
         // First check to see if the file is actually open
@@ -756,7 +751,7 @@ int bvfs_close(int bvfs_FD) {
  *           prior to returning.
  */
 int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
-    int index = bvfs_FD - 1;
+    int index = bvfs_FD;
     int tempCount = count;
 
     // TODO Think about Checking if we can put all the stuff in the partition
@@ -820,6 +815,7 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                         // Update the variables in the Inode
                         INList[index].nextFreeByte = 0;
                         INList[index].lastDB = INList[index].lastDB + 1;
+                        INList[index].numBlocks = INList[index].numBlocks + 1;
                         INList[index].dataBlockAddresses[INList[index].lastDB] = newBlock;
                         
                         // Set tempcount down the number of bytes being written
@@ -883,7 +879,7 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
  *           prior to returning.
  */
 int bvfs_read(int bvfs_FD, void *buf, size_t count) {
-    int index = bvfs_FD - 1;
+    int index = bvfs_FD;
     int tempCount = count;
 
     if (inited == 1) {
@@ -979,9 +975,9 @@ int bvfs_unlink(const char* fileName) {
         int fileDescriptor = findFileDesc(fileName);    
 
         // Check to see if that is a valid file descriptor
-        if (fileDescriptor != - 1) {
+        if (fileDescriptor != -1) {
             // Set the index to reference the Inode with
-            int index = fileDescriptor - 1;
+            int index = fileDescriptor;
 
             // Grab how many block will need to be given back
             int blocksBack = INList[index].numBlocks;
