@@ -46,17 +46,19 @@ struct Inode {
     // I decided to make these all 32 bit because it didn't really matter and helped me 
     // not have to change the padding when I compiled using the make file or my own stuff
     char name[32];          // Name of the file
-    uint32_t fd;             // ID of the file is also the same as the place in the Inode list
-    uint32_t numBlocks;      // Number of blocks in the file
-    uint32_t opened;         // Int to determine how file is open 
+    uint32_t fd;            // ID of the file is also the same as the place in the Inode list
+    uint32_t numBlocks;     // Number of blocks in the file
+    uint32_t opened;        // Int to determine how file is open 
     // 0 = closed, 1 = read, 2 = append, 3 = truncate
-    uint32_t lastDB;         // Last dataBlock that has free space in dataBlockAddresses
+    uint32_t lastDB;        // Last dataBlock that has free space in dataBlockAddresses
     uint32_t nextFreeByte;  // Next free byte in the last dataBlock
     uint32_t numBytes;      // Bytes in the file
     uint16_t dataBlockAddresses[128]; // Diskmap represented as index of the block
     // Meaning I need to multiply by blockSize to get actual location
+    uint32_t cursor;        // Spot to read from in the file
     time_t lastModTime;     // Last time anything happened to the file
-    char padding[196]; // Extra padding to fill the block size
+    char padding[192];      // Extra padding to fill the block size
+    //TODO test the size of this struct
 
 } typedef Inode;
 
@@ -271,6 +273,7 @@ void closeAllFiles() {
         if (INList[i].lastModTime != 0) {
             INList[i].lastModTime = time(NULL);
             INList[i].opened = 0;
+            INList[i].cursor = 0;
         }
     }
     
@@ -389,7 +392,7 @@ int bvfs_init(const char *fs_fileName) {
         Inode Ilst [256];
         
         // Create an empty Inode
-        Inode IN = {0,0,0,0,0,0,0,0,0,0};
+        Inode IN = {0,0,0,0,0,0,0,0,0,0,0};
         //printf("inode: %ld\n", sizeof(IN));
         
         // Write empty Inode blocks to array
@@ -639,7 +642,8 @@ int bvfs_open(const char *fileName, int mode) {
                                  .lastDB = 0,
                                  .nextFreeByte = 0,
                                  .numBytes = 0,
-                                 .lastModTime = time(NULL),
+                                 .cursor = 0,
+                                 .lastModTime = time(NULL)
                 };
 
                 // Copy the arrays over
@@ -713,6 +717,7 @@ int bvfs_close(int bvfs_FD) {
         }
         else {
             INList[index].opened = 0;
+            INList[index].cursor = 0;
             lseek(pFD, blockSize, SEEK_SET);
             write(pFD, (void*)&INList, sizeof(INList));
             return 0;
@@ -879,6 +884,7 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
  *           prior to returning.
  */
 int bvfs_read(int bvfs_FD, void *buf, size_t count) {
+    //TODO error if reading past where stuff is in the file
     int index = bvfs_FD;
     int tempCount = count;
 
@@ -887,49 +893,71 @@ int bvfs_read(int bvfs_FD, void *buf, size_t count) {
         if (INList[index].opened == 1) {
             //TODO see if there is enough stuff to read from the file
             //That is, does the file have enough data in it
+            if ((INList[index].numBytes - INList[index].cursor) >= count) { 
 
-            // Int to keep track of which block we are reading from
-            int blk = 0;
+                // Int to keep track of which block we are reading from
+                int blk = INList[index].cursor/blockSize;
+                int byt = INList[index].cursor%blockSize;
 
-            //Find where the first block of info is in the file
-            int firstBlock = INList[index].dataBlockAddresses[blk];
+                //Find where to first seek to based on the cursor
+                int firstBlock = INList[index].dataBlockAddresses[blk];
 
-            // Seek to the block found above
-            lseek(pFD, firstBlock*blockSize, SEEK_SET);
-            
-            while (tempCount != 0) {
-                // See if we have to read more than 1 block of bytes
-                // If we do, read entire block and seek to the next
-                if (tempCount > 512) {
-                    // Increment the blk to grab
-                    blk = blk + 1;
+                // Seek to the block found above based on the datablock address list
+                lseek(pFD, (firstBlock*blockSize) + byt, SEEK_SET);
+                
+                while (tempCount != 0) {
+                    // See if we have to read more than 1 block of bytes
+                    // If we do, read entire block and seek to the next
+                    if (tempCount > 512) {
 
-                    // Read blockSize bytes to the buffer 
-                    read(pFD, buf, blockSize);
+                        // Read blockSize bytes to the buffer 
+                        read(pFD, buf, blockSize);
 
-                    // Decrement the tempCounter so we know how many bytes are left to read
-                    tempCount = tempCount - blockSize;
+                        // Decrement the tempCounter so we know how many bytes are left to read
+                        tempCount = tempCount - blockSize;
 
-                    // Increment the place in the buffer to put the data
-                    buf = buf + 512;
+                        // Increment the place in the buffer to put the data
+                        buf = buf + blockSize;
 
-                    // Seek to the next block
-                    int nextBlock = INList[index].dataBlockAddresses[blk];
-                    lseek(pFD, nextBlock*blockSize, SEEK_SET);
+                        // Update the cursor
+                        INList[index].cursor = INList[index].cursor + blockSize;
+
+                        // Update blk no need to update byt here
+                        blk = INList[index].cursor/blockSize;
+
+                        // Seek to the next block based on the data block address list
+                        int nextBlock = INList[index].dataBlockAddresses[blk]; 
+                        lseek(pFD, (nextBlock*blockSize) + byt, SEEK_SET);
+                    }
+
+                    // Read what is left
+                    else {
+                        // Read in what is left to the buffer
+                        read(pFD, buf, tempCount);
+
+                        // Increment the cursor by tempCount
+                        // No need to recalculate anything here as were done reading
+                        INList[index].cursor = INList[index].cursor + tempCount;
+
+                        // Set tempCount to 0 to break the loop
+                        tempCount = 0;
+                    }
+                    
                 }
 
-                // Read what is left
-                else {
-                    // Read in what is left to the buffer
-                    read(pFD, buf, tempCount);
-                    // Set tempCount to 0 to break the loop
-                    tempCount = 0;
-                }
+                // Write the Inode list back to the partition
+                lseek(pFD, blockSize, SEEK_SET);
+                write(pFD, (void*)&INList, sizeof(INList));
+
+                //Return the number of bytes read
+                return count;
             }
 
-            //Return the number of bytes read
-            return count;
-        }
+            // Error that there is not enough bytes left to read
+            else {
+                fprintf(stderr, "There is not enough bytes left to read into the buffer.");
+                return -1;
+            }
 
         // Error that the file is not open or is in read mode
         else {
@@ -988,7 +1016,7 @@ int bvfs_unlink(const char* fileName) {
             }
         
             // Create an empty Inode
-            Inode IN = {0,0,0,0,0,0,0,0,0,0};
+            Inode IN = {0,0,0,0,0,0,0,0,0,0,0};
 
             // Write empty Inode to the list and to the partiton
             INList[index] = IN;
