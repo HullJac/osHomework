@@ -571,26 +571,27 @@ int bvfs_open(const char *fileName, int mode) {
                 // Delete everything from the file
                 for(int i = 0; i < INList[index].numBlocks; i++) {
                     int deleteBlock = INList[index].dataBlockAddresses[i];
+                    INList[index].dataBlockAddresses[i] = 0;
                     giveBackBlock(deleteBlock);
                 }
 
                 // Create new data block address list to be put in the Inode
-                uint16_t newAddresses[128];
+                //uint16_t newAddresses[128];
                 
                 // Grab a new block that is empty and put it in the new address list
                 uint16_t newBlock = getFreeBlock();
-                newAddresses[0] = newBlock;
+                //newAddresses[0] = newBlock;
+                INList[index].dataBlockAddresses[0] = newBlock;
 
                 // Put the new address list in the Inode 
-                memcpy(INList[index].dataBlockAddresses, newAddresses, sizeof(newAddresses));
+                //memcpy(INList[index].dataBlockAddresses, newAddresses, sizeof(newAddresses));
 
-                // Set the numBlock back to one
+                // Set the other variables in the Inode back to a new nodes values
                 INList[index].numBlocks = 1;
-
-                // Set the numBytes to zero
+                INList[index].lastDB = 0;
+                INList[index].nextFreeByte = 0;
                 INList[index].numBytes = 0;
-
-                // Set the modification time 
+                INList[index].cursor = 0;
                 INList[index].lastModTime = time(NULL);
             }
             
@@ -958,6 +959,8 @@ int bvfs_read(int bvfs_FD, void *buf, size_t count) {
                 fprintf(stderr, "There is not enough bytes left to read into the buffer.");
                 return -1;
             }
+    
+        }
 
         // Error that the file is not open or is in read mode
         else {
