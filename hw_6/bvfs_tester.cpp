@@ -125,7 +125,7 @@ vector<void (*)()> testSuite {
     int fd = bvfs_close(0);
     string output = restoreOutput();
     if (fd != -1)
-      die("bvfs_close failed to return -1 when closinga  file descriptor that isn't open. Received: ", to_string(fd));
+      die("bvfs_close failed to return -1 when closing a file descriptor that isn't open. Received: ", to_string(fd));
     if (output.size() == 0)
       die("bvfs_close failure did not also print an error message");
 

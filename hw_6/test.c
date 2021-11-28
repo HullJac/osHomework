@@ -47,6 +47,8 @@ int main(int argc, char** argv) {
     printf("read1: %d\n", read1);
     printf("value of read1: %d\n", readNum);
 
+    bvfs_ls();
+
     cl1 = bvfs_close(f1op);
     printf("close fie1 again: %d\n", cl1);
     

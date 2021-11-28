@@ -119,7 +119,7 @@ uint16_t getFreeBlock() { //TODO check places this is called to make sure it doe
                           //TODO if it does, make sure to check for it
     // First check to see if there are any free blocks available
     if (SB.remainingBlocks == 0) {
-        fprintf(stderr, "There are no more free block to give.");
+        //fprintf(stderr, "There are no more free block to give.");
         return -1;
     }
 
@@ -202,6 +202,8 @@ void giveBackBlock(int blk) {
         }
     }
     
+    //TODO think about if these blocks need to count as free blocks too
+    //
     // Else create a new free block node and put it in the list
     if (ifStatement == 0) {
         // List of free spaces to put in the new node which is empty
@@ -242,7 +244,7 @@ int findFileDesc(const char *fileName) {
     }
 
     // Otherwise return -1 to signify not found
-    fprintf(stderr, "Filename: <%s> not found\n", fileName);
+    //fprintf(stderr, "Filename: <%s> not found\n", fileName);
     return -1;
 }
 
@@ -384,9 +386,11 @@ int bvfs_init(const char *fs_fileName) {
         write(pFD, (void*)&super, sizeof(super));
 
         // Create an array of Inodes
-        Inode IN = {0,0,0,0,0,0,0,0,0,0};
-        printf("inode: %ld\n", sizeof(IN));
         Inode Ilst [256];
+        
+        // Create an empty Inode
+        Inode IN = {0,0,0,0,0,0,0,0,0,0};
+        //printf("inode: %ld\n", sizeof(IN));
         
         // Write empty Inode blocks to array
         for (int i = 0; i < 256; i++) {
@@ -446,7 +450,7 @@ int bvfs_init(const char *fs_fileName) {
         read(pFD, (void*)&FS, sizeof(FS));
 
         // Let the user know that the partition was created
-        printf("Created Partition: %s\n", fs_fileName);
+        //printf("Created Partition: %s\n", fs_fileName);
 
         // Set inited to true
         inited = 1;
@@ -531,7 +535,7 @@ int bvfs_open(const char *fileName, int mode) {
     if (inited == 1) {
         // First check to see if the file exists yet or not
         int fileDescriptor = findFileDesc(fileName);
-        printf("fileDescriptor in open: %d\n", fileDescriptor);
+        //printf("fileDescriptor in open: %d\n", fileDescriptor);
 
         // Index to access the Inode array
         int index = fileDescriptor - 1;
@@ -779,17 +783,17 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                 while (tempCount != 0) {
                     // See how many bytes can fit in the current not full block
                     int freeBytes = blockSize - INList[index].nextFreeByte;
-                    printf("freeBytes: %d\n", freeBytes);
+                    //printf("freeBytes: %d\n", freeBytes);
 
                     // If we can fit everything in the current block
                     if (tempCount <= freeBytes) {
 
                         // Seek to the spot to put data and write everything
                         int seekSpot = INList[index].dataBlockAddresses[INList[index].lastDB];
-                        printf("seekSpot: %d\n", seekSpot*blockSize);
-                        printf("seekSpot + offset: %d\n", (seekSpot*blockSize) + INList[index].nextFreeByte);
+                        //printf("seekSpot: %d\n", seekSpot*blockSize);
+                        //printf("seekSpot + offset: %d\n", (seekSpot*blockSize) + INList[index].nextFreeByte);
 
-                        printf("nextFreeByte: %d\n", INList[index].nextFreeByte);
+                        //printf("nextFreeByte: %d\n", INList[index].nextFreeByte);
                         lseek(pFD, (seekSpot*blockSize) + INList[index].nextFreeByte, SEEK_SET); 
                         write(pFD, buf, tempCount);
 
@@ -967,7 +971,55 @@ int bvfs_read(int bvfs_FD, void *buf, size_t count) {
  *           Also, print a meaningful error to stderr prior to returning.
  */
 int bvfs_unlink(const char* fileName) {
-    //Decrement SB.remaining files and blocks
+    //Increment SB.remaining files and blocks
+    
+    // First check if the partiton was inited
+    if (inited == 1) {
+        // Find the corresponding file descriptor
+        int fileDescriptor = findFileDesc(fileName);    
+
+        // Check to see if that is a valid file descriptor
+        if (fileDescriptor != - 1) {
+            // Set the index to reference the Inode with
+            int index = fileDescriptor - 1;
+
+            // Grab how many block will need to be given back
+            int blocksBack = INList[index].numBlocks;
+
+            // Loop blocksBack many times giving back the blocks
+            for (int i = 0; i < blocksBack; i++) {
+                giveBackBlock(INList[index].dataBlockAddresses[i]);
+            }
+        
+            // Create an empty Inode
+            Inode IN = {0,0,0,0,0,0,0,0,0,0};
+
+            // Write empty Inode to the list and to the partiton
+            INList[index] = IN;
+            lseek(pFD, blockSize, SEEK_SET);
+            write(pFD, (void*)&INList, sizeof(INList));
+            
+            // Update the number of files in the superblock
+            SB.remainingFiles = SB.remainingFiles + 1;
+            lseek(pFD, 0, SEEK_SET);
+            write(pFD, (void*)&SB, sizeof(SB));
+
+            // Return successfully
+            return 0;
+        }
+
+        // Error that the file name was not found
+        else {
+            fprintf(stderr, "Filename <%s> was not found.", fileName);
+            return -1;
+        }
+    }
+    
+    // Error that init was never called
+    else {
+        fprintf(stderr, "bvfs_init was never called.\n");
+        return -1;
+    }
 }
 
 
@@ -1005,7 +1057,7 @@ int bvfs_unlink(const char* fileName) {
 void bvfs_ls() {
     // Calculate and print the number of files in the file system
     int numFiles = maxFiles - SB.remainingFiles;
-    printf(" | %d Files\n", numFiles);
+    printf(" | %d File(s)\n", numFiles);
    
     // Create and array containing all the file indexes
 
@@ -1025,7 +1077,18 @@ void bvfs_ls() {
 
     // Loop numFiles times printing out info of each file
     for (int i = 0; i < numFiles; i++) {
+        // Grab variables to print out
         int index = files[i];
-        printf(" | bytes: %d, blocks: %d, %s, %s\n", bytes, blocks, ctime(&))
+        int bytes = INList[index].numBytes;
+        int blocks = INList[index].numBlocks;
+        time_t lastTime = INList[index].lastModTime;
+        char* fName = INList[index].name;
+
+        // Convert the time and take away the newline
+        char* fileTime = ctime(&lastTime);
+        fileTime[strlen(fileTime) - 1] = '\0';
+
+        // Print file info to the screen
+        printf(" | bytes: %d, blocks: %d, %s, %s\n", bytes, blocks, fileTime, fName);
     }
 }
