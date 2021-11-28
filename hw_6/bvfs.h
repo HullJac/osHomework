@@ -344,7 +344,6 @@ int bvfs_init(const char *fs_fileName) {
         // Create and write the inital super block
         uint32_t numRemBlocks = 16384 - 1 - maxFiles - maxFreeBlocks;
         superBlock super = {256, 257, numRemBlocks, 0};
-        //printf("super block: %ld\n", sizeof(super));
         write(pFD, (void*)&super, sizeof(super));
 
         // Create an array of Inodes
@@ -352,7 +351,6 @@ int bvfs_init(const char *fs_fileName) {
         
         // Create an empty Inode
         Inode IN = {0,0,0,0,0,0,0,0,0,0,0};
-        //printf("inode: %ld\n", sizeof(IN));
         
         // Write empty Inode blocks to array
         for (int i = 0; i < 256; i++) {
@@ -391,7 +389,6 @@ int bvfs_init(const char *fs_fileName) {
             freeSpace FB; 
             memcpy(FB.freeBlocks, freeList, sizeof(freeList));
             FB.nextFreeSpaceBlock = nextFreeNode;
-            //printf("free block: %ld\n", sizeof(FB));
             
             // Write the free block to file at the seeked location from above
             write(pFD, (void*)&FB, sizeof(FB));
@@ -410,9 +407,6 @@ int bvfs_init(const char *fs_fileName) {
         read(pFD, (void*)&SB, sizeof(SB));
         read(pFD, (void*)&INList, sizeof(INList));
         read(pFD, (void*)&FS, sizeof(FS));
-
-        // Let the user know that the partition was created
-        //printf("Created Partition: %s\n", fs_fileName);
 
         // Set inited to true
         inited = 1;
