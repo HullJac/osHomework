@@ -44,7 +44,7 @@
 // Struct to represent the Inodes in this file system
 struct Inode {
     // I decided to make these all 32 bit because it didn't really matter and helped me 
-    // not have to change the padding when I compiled using the make file or my own stuff
+    // not have to change the padding when I compiled differently using the make file or my own stuff
     char name[32];          // Name of the file
     uint32_t fd;            // ID of the file is also the same as the place in the Inode list
     uint32_t numBlocks;     // Number of blocks in the file
@@ -58,7 +58,6 @@ struct Inode {
     uint32_t cursor;        // Spot to read from in the file
     time_t lastModTime;     // Last time anything happened to the file
     char padding[192];      // Extra padding to fill the block size
-    //TODO test the size of this struct
 
 } typedef Inode;
 
@@ -117,11 +116,9 @@ void bvfs_ls();
 // Returns a pointer to that block
 // If needed, will move to the next free block and return the address
 // of the empty free block while changing the head pointer of the free block list
-uint16_t getFreeBlock() { //TODO check places this is called to make sure it doesn't get -1
-                          //TODO if it does, make sure to check for it
+uint16_t getFreeBlock() { 
     // First check to see if there are any free blocks available
     if (SB.remainingBlocks == 0) {
-        //fprintf(stderr, "There are no more free block to give.");
         return -1;
     }
 
@@ -204,8 +201,6 @@ void giveBackBlock(int blk) {
         }
     }
     
-    //TODO think about if these blocks need to count as free blocks too
-    //
     // Else create a new free block node and put it in the list
     if (ifStatement == 0) {
         // List of free spaces to put in the new node which is empty
@@ -481,10 +476,7 @@ int bvfs_init(const char *fs_fileName) {
  *           returning.
  */
 int bvfs_detach() { 
-    //TODO check for more stuff to do here like writing FB and SB
-    //TODO right now, I am handling writing everything when something changes
-    //TODO check for anything that was malloced
-
+    // Check if the partition was inited
     if (inited == 1) {
         // Close all the files
         closeAllFiles();
@@ -574,17 +566,20 @@ int bvfs_open(const char *fileName, int mode) {
                     INList[index].dataBlockAddresses[i] = 0;
                     giveBackBlock(deleteBlock);
                 }
-
-                // Create new data block address list to be put in the Inode
-                //uint16_t newAddresses[128];
                 
                 // Grab a new block that is empty and put it in the new address list
                 uint16_t newBlock = getFreeBlock();
-                //newAddresses[0] = newBlock;
-                INList[index].dataBlockAddresses[0] = newBlock;
+                
+                // Check if there are blocks left
+                // There always should be since I just gave some back, but just to be safe
+                if (newBlock == -1) {
+                    fprintf(stderr, "There are no more free blocks left.");
+                    return -1;
+                }
 
                 // Put the new address list in the Inode 
-                //memcpy(INList[index].dataBlockAddresses, newAddresses, sizeof(newAddresses));
+                INList[index].dataBlockAddresses[0] = newBlock;
+
 
                 // Set the other variables in the Inode back to a new nodes values
                 INList[index].numBlocks = 1;
@@ -616,7 +611,7 @@ int bvfs_open(const char *fileName, int mode) {
             // Check if there is a free file first
             int isFree = findFreeFile();
             if (isFree == -1) {
-                fprintf(stderr, "There are no free files left.\n");
+                fprintf(stderr, "There are no more free files left.\n");
                 return -1;
             }
 
@@ -633,6 +628,13 @@ int bvfs_open(const char *fileName, int mode) {
 
                 // Get the block where the data for this file will live
                 uint16_t firstBlock = getFreeBlock();
+                
+                // Check if there are blocks left
+                if (firstBlock == -1) {
+                    fprintf(stderr, "There are no more free blocks left.");
+                    return -1;
+                }
+
                 uint16_t addresses[128];
                 addresses[0] = firstBlock;
 
@@ -760,9 +762,6 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
     int index = bvfs_FD;
     int tempCount = count;
 
-    // TODO Think about Checking if we can put all the stuff in the partition
-    // Is the partition space left too small?????:w
-
     if (inited == 1) {
         // Check if the file is opened properly
         if (INList[index].opened == 2 || INList[index].opened == 3) {
@@ -773,6 +772,12 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                 if (INList[index].nextFreeByte >= 512) {
                     // Grab a new block and move everything around
                     uint16_t newBlock = getFreeBlock();
+
+                    // Check if there are blocks left
+                    if (newBlock == -1) {
+                        fprintf(stderr, "There are no more free blocks left.\n");
+                        return -1;
+                    }
                     
                     // Update the variables in the Inode
                     INList[index].nextFreeByte = 0;
@@ -784,17 +789,13 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                 while (tempCount != 0) {
                     // See how many bytes can fit in the current not full block
                     int freeBytes = blockSize - INList[index].nextFreeByte;
-                    //printf("freeBytes: %d\n", freeBytes);
 
                     // If we can fit everything in the current block
                     if (tempCount <= freeBytes) {
 
                         // Seek to the spot to put data and write everything
                         int seekSpot = INList[index].dataBlockAddresses[INList[index].lastDB];
-                        //printf("seekSpot: %d\n", seekSpot*blockSize);
-                        //printf("seekSpot + offset: %d\n", (seekSpot*blockSize) + INList[index].nextFreeByte);
 
-                        //printf("nextFreeByte: %d\n", INList[index].nextFreeByte);
                         lseek(pFD, (seekSpot*blockSize) + INList[index].nextFreeByte, SEEK_SET); 
                         write(pFD, buf, tempCount);
 
@@ -817,6 +818,12 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                         
                         // Grab a new block and move everything around
                         uint16_t newBlock = getFreeBlock();
+                        
+                        // Check if there are blocks left
+                        if (newBlock == -1) {
+                            fprintf(stderr, "There are not enough free block to write that to file.\nSome data may not have been written to the file.\n");
+                            return -1;
+                        }
                         
                         // Update the variables in the Inode
                         INList[index].nextFreeByte = 0;
@@ -885,15 +892,14 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
  *           prior to returning.
  */
 int bvfs_read(int bvfs_FD, void *buf, size_t count) {
-    //TODO error if reading past where stuff is in the file
     int index = bvfs_FD;
     int tempCount = count;
 
     if (inited == 1) {
         // Check if the file is opened properly
         if (INList[index].opened == 1) {
-            //TODO see if there is enough stuff to read from the file
-            //That is, does the file have enough data in it
+            // See if there is enough stuff to read from the file
+            // That is, does the file have enough data in it to read based on the cursor
             if ((INList[index].numBytes - INList[index].cursor) >= count) { 
 
                 // Int to keep track of which block we are reading from
