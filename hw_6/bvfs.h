@@ -34,9 +34,6 @@
 #include <stdint.h>
 #include <time.h>
 
-//TODO
-//TODO Run this on Kay so that I make sure the blocks are all still 512 and stuff lines up and works
-//TODO
 
 // Struct to represent the Inodes in this file system
 struct Inode {
