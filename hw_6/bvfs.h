@@ -133,10 +133,10 @@ uint16_t getFreeBlock() {
             lseek(pFD, SB.firstFreeList*blockSize, SEEK_SET);
             write(pFD, (void*)&FS, sizeof(FS));
             
-            // Return the pointer to that block given
             return block;
         }
     }
+
     // Otherwise, if there are no free spaces left in the current block
     // move to the next free node block
     if (block == 0) {
@@ -157,7 +157,6 @@ uint16_t getFreeBlock() {
         lseek(pFD, 0, SEEK_SET);
         write(pFD, (void*)&SB, sizeof(SB));
 
-        // Return the block
         return block;
     }
 }
@@ -215,10 +214,8 @@ void giveBackBlock(int blk) {
         lseek(pFD, blk*blockSize, SEEK_SET);
         write(pFD, (void*)&newFree, sizeof(newFree));
 
-        // Rearange the head pointer to point to the new block
+        // Rearange the SB head pointer to point to the new block and write the SB back file
         SB.firstFreeList = blk;
-        
-        // Write the SB back to the file
         lseek(pFD, 0, SEEK_SET);
         write(pFD, (void*)&SB, sizeof(SB));
     }
@@ -343,10 +340,8 @@ int bvfs_init(const char *fs_fileName) {
         superBlock super = {256, 257, numRemBlocks, 0};
         write(pFD, (void*)&super, sizeof(super));
 
-        // Create an array of Inodes
+        // Create an array of Inodes and an empty Inode
         Inode Ilst [256];
-        
-        // Create an empty Inode
         Inode IN = {0,0,0,0,0,0,0,0,0,0,0};
         
         // Write empty Inode blocks to array
@@ -437,6 +432,7 @@ int bvfs_detach() {
         closeAllFiles();
         // Set inited to 0 so nothing works
         inited = 0;
+
         return 0;
     }
 
