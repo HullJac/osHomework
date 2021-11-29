@@ -743,7 +743,7 @@ int bvfs_write(int bvfs_FD, const void *buf, size_t count) {
                 }
 
                 // Loop through writing block at a time until all bytes are written
-                while (tempCount != 0) {
+                while (tempCount > 0) {
                     // See how many bytes can fit in the current not full block
                     int freeBytes = blockSize - INList[index].nextFreeByte;
 
@@ -859,54 +859,97 @@ int bvfs_read(int bvfs_FD, void *buf, size_t count) {
             // That is, does the file have enough data in it to read based on the cursor
             if ((INList[index].numBytes - INList[index].cursor) >= count) { 
 
-                // Int to keep track of which block we are reading from
+                // Ints to keep track of which block and bytes we are reading from
                 int blk = INList[index].cursor/blockSize;
                 int byt = INList[index].cursor%blockSize;
 
-                //Find where to first seek to based on the cursor
+                // Find where to first seek to based on the cursor
                 int firstBlock = INList[index].dataBlockAddresses[blk];
 
                 // Seek to the block found above based on the datablock address list
                 lseek(pFD, (firstBlock*blockSize) + byt, SEEK_SET);
                 
-                while (tempCount != 0) {
-                    // See if we have to read more than 1 block of bytes
-                    // If we do, read entire block and seek to the next
-                    if (tempCount > 512) {
+                while (tempCount > 0) {
+                    // If there is still room in the first 
+                    if (byt > 0) {
+                        // Check if we need to read in the rest of the block or not
+                        
+                        // If we can fit everything in the block
+                        if (tempCount <= (blockSize - byt)) {
+                            // Read in what is left to the buffer
+                            read(pFD, buf, tempCount);
 
-                        // Read blockSize bytes to the buffer 
-                        read(pFD, buf, blockSize);
+                            // Increment the cursor by tempCount
+                            // No need to recalculate anything here as were done reading
+                            INList[index].cursor = INList[index].cursor + tempCount;
 
-                        // Decrement the tempCounter so we know how many bytes are left to read
-                        tempCount = tempCount - blockSize;
+                            // Set tempCount to 0 to break the loop
+                            tempCount = 0;
+                        }
 
-                        // Increment the place in the buffer to put the data
-                        buf = buf + blockSize;
+                        // If we need to write everything and grab another block 
+                        else {
+                            // Read (blockSize - byt) bytes to the buffer 
+                            read(pFD, buf, (blockSize - byt));
 
-                        // Update the cursor
-                        INList[index].cursor = INList[index].cursor + blockSize;
+                            // Decrement the tempCounter so we know how many bytes are left to read
+                            tempCount = tempCount - (blockSize - byt);
 
-                        // Update blk no need to update byt here
-                        blk = INList[index].cursor/blockSize;
+                            // Increment the place in the buffer to put the data
+                            buf = buf + (blockSize - byt);
 
-                        // Seek to the next block based on the data block address list
-                        int nextBlock = INList[index].dataBlockAddresses[blk]; 
-                        lseek(pFD, (nextBlock*blockSize) + byt, SEEK_SET);
+                            // Update the cursor
+                            INList[index].cursor = INList[index].cursor + (blockSize - byt);
+
+                            // Update blk and byt
+                            blk = INList[index].cursor/blockSize;
+                            byt = 0;
+
+                            // Seek to the next block based on the data block address list
+                            int nextBlock = INList[index].dataBlockAddresses[blk]; 
+                            lseek(pFD, (nextBlock*blockSize) + byt, SEEK_SET);
+                        }
                     }
 
-                    // Read what is left
-                    else {
-                        // Read in what is left to the buffer
-                        read(pFD, buf, tempCount);
+                    // If the first free space is a whole block empty
+                    else  {
+                        // See if we have to read more than 1 block of bytes
+                        // If we do, read entire block and seek to the next
+                        if (tempCount > 512) {
+                            
+                            // Read blockSize bytes to the buffer 
+                            read(pFD, buf, blockSize);
 
-                        // Increment the cursor by tempCount
-                        // No need to recalculate anything here as were done reading
-                        INList[index].cursor = INList[index].cursor + tempCount;
+                            // Decrement the tempCounter so we know how many bytes are left to read
+                            tempCount = tempCount - blockSize;
 
-                        // Set tempCount to 0 to break the loop
-                        tempCount = 0;
+                            // Increment the place in the buffer to put the data
+                            buf = buf + blockSize;
+
+                            // Update the cursor
+                            INList[index].cursor = INList[index].cursor + blockSize;
+
+                            // Update blk no need to update byt here
+                            blk = INList[index].cursor/blockSize;
+
+                            // Seek to the next block based on the data block address list
+                            int nextBlock = INList[index].dataBlockAddresses[blk]; 
+                            lseek(pFD, (nextBlock*blockSize) + byt, SEEK_SET);
+                        }
+
+                        // Read what is left
+                        else {
+                            // Read in what is left to the buffer
+                            read(pFD, buf, tempCount);
+
+                            // Increment the cursor by tempCount
+                            // No need to recalculate anything here as were done reading
+                            INList[index].cursor = INList[index].cursor + tempCount;
+
+                            // Set tempCount to 0 to break the loop
+                            tempCount = 0;
+                        }
                     }
-                    
                 }
 
                 // Write the Inode list back to the partition
