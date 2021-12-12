@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
 
     // Open a file to the in and out files
     FILE* inFile = fopen(inFileName, "rb+");
-    printf("file pointer : %ld\n", sizeof(inFile));
+    //printf("file pointer : %ld\n", sizeof(inFile));
     FILE* outFile = fopen(outFileName, "wb+");
 
     // If we can just sort everything in memory
@@ -154,17 +154,18 @@ int main(int argc, char* argv[]) {
 
             // have to do math to figure out sizes of stuff
             //TODO Check case of only having one number here to sort
+            //TODO check case of having an odd number of numbers
             else {
                 // Divide bytes left in half
-                uint32_t numNums = (sizeCmp / 4) / 2;
+                uint32_t numNums = (sizeCmp / 4);
 
                 // Create stucts
                 chunkInfo strct1;
                 chunkInfo strct2;
 
                 // Add stuff to structs
-                uint32_t* arr1 = (uint32_t*) malloc(sizeof(uint32_t) * numNums);
-                fread(arr1, sizeof(uint32_t), numNums, inFile);
+                uint32_t* arr1 = (uint32_t*) malloc(sizeof(uint32_t) * numNums/2);
+                fread(arr1, sizeof(uint32_t), numNums/2, inFile);
                 
                 strcat(fileName, "a");
                 char* fName1 = (char*) malloc(sizeof(fileName));
@@ -172,19 +173,19 @@ int main(int argc, char* argv[]) {
 
                 strct1.name = fName1;
                 strct1.arrNums = arr1;
-                strct1.sz = numNums;
+                strct1.sz = numNums/2;
                 
-                uint32_t* arr2 = (uint32_t*) malloc(sizeof(uint32_t) * numNums);
-                fread(arr2, sizeof(uint32_t), numNums, inFile);
+                uint32_t* arr2 = (uint32_t*) malloc(sizeof(uint32_t) * numNums/2);
+                fread(arr2, sizeof(uint32_t), numNums/2, inFile);
                 strcat(fileName, "a");
                 char* fName2 = (char*) malloc(sizeof(fileName));
                 strcpy(fName2, fileName);
                 
                 strct2.name = fName2;
                 strct2.arrNums = arr1;
-                strct2.sz = numNums;
+                strct2.sz = numNums/2;
 
-                sizeCmp -= (numNums * 2);
+                sizeCmp -= (numNums * 4);
                 
                 // Launch threads
                 pthread_create(&tID2, NULL, sortChunk, &strct2);
@@ -195,44 +196,69 @@ int main(int argc, char* argv[]) {
                 pthread_join(tID2, NULL);
             
                 // Freeing stuff
+        printf("This one\n");
+        fflush(stdout);
                 free(arr1);
+        printf("This one\n");
+        fflush(stdout);
                 free(arr2);
+        printf("This one\n");
+        fflush(stdout);
                 free(fName1);
+        printf("This one\n");
+        fflush(stdout);
                 free(fName2);
             }
         }
         
-        // List of file handle
+        // Bools for main loop
+        uint8_t empty = 0;
+
+        // List of file handles
         char fn[64] = {};
-        //FILE** fileList = (FILE**) malloc(sizeof(FILE*) * strlen(fileName));
-        printf("%ld\n", strlen(fileName));
         FILE* fileList[strlen(fileName)];
         for (int i = 0; i < strlen(fileName); i++) {
             strcat(fn, "a");
-            //FILE* f = fopen(fn, "rb+");
             fileList[i] = fopen(fn, "rb+");
-            //fileList[i] = f;
-            //memcpy(fileList[i], f, sizeof(f));
         }
         
-        // Create out buffer 
+        // Create out buffer 128 megabytes
         uint32_t* outBuf = (uint32_t*) malloc(sizeof(uint32_t) * ((268435456 / 2) / 4));
         
         // Array of arrays to hold file buffers
         uint32_t* arrayList = (uint32_t*) malloc(sizeof(uint32_t) * (strlen(fileName) * (268435456 / 4) / strlen(fileName)));
-
-
-        // Grab buffers from each file
         
+        // Grab buffers from each file
+        // TODO check the case of different sized files
+        for (int i = 0; i < strlen(fileName); i++) {
+            fread(&arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
+        }
 
+        // Create list of pointers into buffers
+        uint32_t pointers[strlen(fileName)];
+        for (int i = 0; i < strlen(fileName); i++) {
+            pointers[i] = 0;
+        }
+
+        // Compare stuff in buffers until one is empty 
+        // Also check if the out buffer is full
+        while (empty != 1) {
+            // Do comparison and take one out
+            
+            empty = 1;
+
+        }
         // When a buffer is empty, grab more until it is all gone, then erase the file
         
 
         // To erase a file use remove("filename")
 
+        printf("This one\n");
+        fflush(stdout);
         // Freeing stuff
-        //free(fileList);  ///////////TODO
         free(arrayList);
+        printf("This one\n");
+        fflush(stdout);
         free(outBuf);
     }
 
