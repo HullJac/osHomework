@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     }
 
     // File information
-    char fileName[64] = {};
+    char fileName[32] = {};
     
     // Get how big a file is in bytes and how many numbers there are
     struct stat st;
@@ -196,17 +196,9 @@ int main(int argc, char* argv[]) {
                 pthread_join(tID2, NULL);
             
                 // Freeing stuff
-        printf("This one\n");
-        fflush(stdout);
                 free(arr1);
-        printf("This one\n");
-        fflush(stdout);
                 free(arr2);
-        printf("This one\n");
-        fflush(stdout);
                 free(fName1);
-        printf("This one\n");
-        fflush(stdout);
                 free(fName2);
             }
         }
@@ -215,25 +207,30 @@ int main(int argc, char* argv[]) {
         uint8_t empty = 0;
 
         // List of file handles
-        char fn[64] = {};
+        char fn[32] = {};
         FILE* fileList[strlen(fileName)];
-        for (int i = 0; i < strlen(fileName); i++) {
-            strcat(fn, "a");
-            fileList[i] = fopen(fn, "rb+");
-        }
-        
+
         // Create out buffer 128 megabytes
+        uint32_t outCounter = 0;
         uint32_t* outBuf = (uint32_t*) malloc(sizeof(uint32_t) * ((268435456 / 2) / 4));
         
         // Array of arrays to hold file buffers
-        uint32_t* arrayList = (uint32_t*) malloc(sizeof(uint32_t) * (strlen(fileName) * (268435456 / 4) / strlen(fileName)));
-        
-        // Grab buffers from each file
         // TODO check the case of different sized files
+        //uint32_t* arrayList = (uint32_t*) malloc(sizeof(uint32_t) * ((strlen(fileName) * (268435456 / 4) / strlen(fileName))));
+        uint32_t* arrayList[strlen(fileName)];
         for (int i = 0; i < strlen(fileName); i++) {
-            fread(&arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
+            // Open all the files and add the pointers to a list
+            strcat(fn, "a");
+            fileList[i] = fopen(fn, "rb+");
+            
+            // Malloc all the buffers
+            arrayList[i] = (uint32_t*) malloc(sizeof(uint32_t) * ((268435456 / 4) / strlen(fileName)));
+            
+            // Read data into the buffers
+            fread(arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
         }
 
+        /*
         // Create list of pointers into buffers
         uint32_t pointers[strlen(fileName)];
         for (int i = 0; i < strlen(fileName); i++) {
@@ -245,20 +242,29 @@ int main(int argc, char* argv[]) {
         while (empty != 1) {
             // Do comparison and take one out
             
+
+            outCounter ++;
+
+            // If the outBuffer is full
+            // TODO check if write moves the pointer
+            if (outCounter == (sizeof(outBuf) / 4)) {
+                fwrite(outBuf, sizeof(uint32_t), outCounter, outFile);
+                outCounter = 0;
+            
+
             empty = 1;
+            }
 
         }
+        */
+
         // When a buffer is empty, grab more until it is all gone, then erase the file
         
 
-        // To erase a file use remove("filename")
-
-        printf("This one\n");
-        fflush(stdout);
         // Freeing stuff
-        free(arrayList);
-        printf("This one\n");
-        fflush(stdout);
+        for (int i = 0; i < strlen(fileName); i ++) {
+            free(arrayList[i]);
+        }
         free(outBuf);
     }
 
@@ -266,25 +272,12 @@ int main(int argc, char* argv[]) {
     // Close files and return
     fclose(inFile);
     fclose(outFile);
+
+    // TODO Remove all the extra files
+    // To erase a file use remove("filename")
     
     return 0;
 }
 
-
 // 1024*1024*256 = 256 megabytes
 // /sizof(uint32_t) = number of ints in 256 megabytes
-        
-                //printf("%s : %s\n", strct1.name, strct2.name);
-
-//printf("here\n");
-        //fflush(stdout);
-                /*
-                for (int i = 0; i< 1000; i++) {
-                    printf("%d\n", arr1[i]);
-                }
-                */
-
-
-
-
-
