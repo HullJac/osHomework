@@ -11,6 +11,9 @@
 // Num threads = 4
 // 768 free RAM
 
+uint32_t fiveT = 536870912;
+uint32_t twoF = 268435456;
+
 struct chunkInfo {
     uint32_t* arrNums;
     uint32_t sz;
@@ -77,7 +80,7 @@ int main(int argc, char* argv[]) {
     FILE* outFile = fopen(outFileName, "wb+");
 
     // If we can just sort everything in memory
-    if (size < 536870912) { // Number here is 512 megabytes
+    if (size < fiveT) { // Number here is 512 megabytes
         uint32_t numNums = size/4;
         
         // Create and array the size of the number of ints we have
@@ -106,8 +109,8 @@ int main(int argc, char* argv[]) {
         // Decide how big chunks should be
         while (sizeCmp > 0) {
             // If I can launch 2 full threads
-            if (sizeCmp >= 536870912) {
-                uint32_t numNums = 268435456 / 4;
+            if (sizeCmp >= fiveT) {
+                uint32_t numNums = twoF / 4;
                 
                 // Create stucts
                 chunkInfo strct1;
@@ -135,7 +138,7 @@ int main(int argc, char* argv[]) {
                 strct2.arrNums = arr1;
                 strct2.sz = numNums;
 
-                sizeCmp -= 536870912;
+                sizeCmp -= fiveT;
                 
                 // Launch threads
                 pthread_create(&tID2, NULL, sortChunk, &strct2);
@@ -156,13 +159,13 @@ int main(int argc, char* argv[]) {
             //TODO Check case of only having one number here to sort
             //TODO check case of having an odd number of numbers
             else {
-                if (sizeCmp > 268435456) {
+                if (sizeCmp > twoF) {
                     // Create stucts
                     chunkInfo strct1;
                     chunkInfo strct2;
 
                     // Add stuff to structs
-                    uint32_t arrsz = 268435456 / 4;
+                    uint32_t arrsz = twoF / 4;
                     uint32_t* arr1 = (uint32_t*) malloc(sizeof(uint32_t) * arrsz);
                     fread(arr1, sizeof(uint32_t), arrsz, inFile);
                     
@@ -175,7 +178,7 @@ int main(int argc, char* argv[]) {
                     strct1.sz = arrsz;
 
                     // Subtract what was just written
-                    sizeCmp -= 268435456;
+                    sizeCmp -= twoF;
                     
                     arrsz = sizeCmp / 4;
                     uint32_t* arr2 = (uint32_t*) malloc(sizeof(uint32_t) * arrsz);
@@ -247,7 +250,7 @@ int main(int argc, char* argv[]) {
 
         // Create out buffer 128 megabytes
         uint32_t outCounter = 0;
-        uint32_t* outBuf = (uint32_t*) malloc(sizeof(uint32_t) * ((268435456 / 2) / 4));
+        uint32_t* outBuf = (uint32_t*) malloc(sizeof(uint32_t) * ((twoF / 4) / 2));
         
         // Create list of pointers into buffers
         long long int pointers[strlen(fileName)];
@@ -261,10 +264,10 @@ int main(int argc, char* argv[]) {
             fileList[i] = fopen(fn, "rb+");
             
             // Malloc all the buffers
-            arrayList[i] = (uint32_t*) malloc(sizeof(uint32_t) * ((268435456 / 4) / strlen(fileName)));
+            arrayList[i] = (uint32_t*) malloc(sizeof(uint32_t) * ((twoF / 4) / strlen(fileName)));
             
             // Read data into the buffers
-            uint32_t r = fread(arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
+            uint32_t r = fread(arrayList[i], sizeof(uint32_t), ((twoF / 4) / strlen(fileName)), fileList[i]);
             
             // Fill the pointer list that reference the buffer offsets
             pointers[i] = 0;
@@ -274,18 +277,19 @@ int main(int argc, char* argv[]) {
         // Also check if the out buffer is full
         uint32_t smallestNum = arrayList[0][0];
         uint32_t smallestPos = 0;
+
         while (empty != 1) {
             // Do comparison to find lowest number of the buffers
             for (int i = 0; i < strlen(fileName); i++) {
                 // Check if any of the pointers are at the end of the buffer size
                 // TODO check for weird case of extra chunk of smaller size
                 //printf("%d\n", pointers[i]);
-                if (pointers[i] > ((268435456 / 4) / strlen(fileName))) {
+                if (pointers[i] > ((twoF / 4) / strlen(fileName))) {
                     printf("pointers at i %d : %lld\n",i ,pointers[i]);
                     // Read in more data to that buffer
-                    uint32_t bytesRead = fread(arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
-                    printf("reading : %d\n", i);
-                    printf("bytesRead : %d\n", bytesRead);
+                    uint32_t bytesRead = fread(arrayList[i], sizeof(uint32_t), ((twoF / 4) / strlen(fileName)), fileList[i]);
+                    printf("reading at i = %d\n", i);
+                    printf("bytesRead at i = %d\n", bytesRead);
                     pointers[i] = 0;
                     
                     //printf("bytesread %d: %d\n",i ,bytesRead);
@@ -315,8 +319,8 @@ int main(int argc, char* argv[]) {
 
             // If the outBuffer is full
             // TODO check if write moves the pointer
-            if (outCounter == ((268435456 / 2) / 4) || filesDone == strlen(fileName)) {
-                //printf("outcounter %d : %d\n", outCounter, ((268435456 / 2) / 4));
+            if (outCounter == ((twoF / 4) / 2) || filesDone == strlen(fileName)) {
+                //printf("outcounter %d : %d\n", outCounter, ((twoF / 2) / 4));
                 //printf("filesDone %d : %ld\n", filesDone, strlen(fileName));
                 fwrite(outBuf, sizeof(uint32_t), outCounter, outFile);
                 outCounter = 0;
@@ -333,7 +337,7 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < strlen(fileName); i++) {
                 if (pointers[i] != -1) {
                     smallestNum = arrayList[i][pointers[i]]; 
-                    smallestPos = i ;
+                    smallestPos = i;
                     break;
                 }
             }
