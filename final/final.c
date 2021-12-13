@@ -238,6 +238,9 @@ int main(int argc, char* argv[]) {
         // Bools for main loop
         uint8_t empty = 0;
 
+        // Keeps track of number of completed files
+        uint8_t filesDone = 0;
+
         // List of file handles
         char fn[32] = {};
         FILE* fileList[strlen(fileName)];
@@ -247,11 +250,11 @@ int main(int argc, char* argv[]) {
         uint32_t* outBuf = (uint32_t*) malloc(sizeof(uint32_t) * ((268435456 / 2) / 4));
         
         // Create list of pointers into buffers
-        uint32_t pointers[strlen(fileName)];
+        long long int pointers[strlen(fileName)];
         
-        // Array of arrays to hold file buffers
-        // TODO check the case of different sized files
+        // Array of pointers to hold file buffers
         uint32_t* arrayList[strlen(fileName)];
+
         for (uint32_t i = 0; i < strlen(fileName); i++) {
             // Open all the files and add the pointers to a list
             strcat(fn, "a");
@@ -261,8 +264,9 @@ int main(int argc, char* argv[]) {
             arrayList[i] = (uint32_t*) malloc(sizeof(uint32_t) * ((268435456 / 4) / strlen(fileName)));
             
             // Read data into the buffers
-            fread(arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
+            uint32_t r = fread(arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
             
+            // Fill the pointer list that reference the buffer offsets
             pointers[i] = 0;
         }
 
@@ -273,40 +277,75 @@ int main(int argc, char* argv[]) {
         while (empty != 1) {
             // Do comparison to find lowest number of the buffers
             for (int i = 0; i < strlen(fileName); i++) {
-                if (smallestNum > arrayList[i][pointers[i]]) {
+                // Check if any of the pointers are at the end of the buffer size
+                // TODO check for weird case of extra chunk of smaller size
+                //printf("%d\n", pointers[i]);
+                if (pointers[i] > ((268435456 / 4) / strlen(fileName))) {
+                    printf("pointers at i %d : %lld\n",i ,pointers[i]);
+                    // Read in more data to that buffer
+                    uint32_t bytesRead = fread(arrayList[i], sizeof(uint32_t), ((268435456 / 4) / strlen(fileName)), fileList[i]);
+                    printf("reading : %d\n", i);
+                    printf("bytesRead : %d\n", bytesRead);
+                    pointers[i] = 0;
+                    
+                    //printf("bytesread %d: %d\n",i ,bytesRead);
+                    //fflush(stdout);
+                    if (bytesRead == 0) {
+                        pointers[i] = -1;
+                        filesDone ++;
+                    }
+                }
+
+                if (pointers[i] == -1);
+                
+                else if (smallestNum > arrayList[i][pointers[i]]) {
                     smallestNum = arrayList[i][pointers[i]];
                     smallestPos = i;
                 }
             }
+                    
+            // Increment the offset of the buffer taken from
+            pointers[smallestPos] ++;
 
             // Grab the lowest and put it in outBuf
-            outBuf[coutCounter] = smallestNum;
+            outBuf[outCounter] = smallestNum;
 
             // Increment outBuf
             outCounter ++;
 
             // If the outBuffer is full
             // TODO check if write moves the pointer
-            if (outCounter == (sizeof(outBuf) / 4)) {
+            if (outCounter == ((268435456 / 2) / 4) || filesDone == strlen(fileName)) {
+                //printf("outcounter %d : %d\n", outCounter, ((268435456 / 2) / 4));
+                //printf("filesDone %d : %ld\n", filesDone, strlen(fileName));
                 fwrite(outBuf, sizeof(uint32_t), outCounter, outFile);
                 outCounter = 0;
             }
-
-            // Check if any of the pointers are at the end
-
-            empty = 1;
+            
+            // Check if all the buffers are empty
+            if (filesDone == strlen(fileName)) {
+                //printf("in filesDone\n");
+                //fflush(stdout);
+                empty = 1;
+            }
+            
+            // Reset the smallest variables 
+            for (int i = 0; i < strlen(fileName); i++) {
+                if (pointers[i] != -1) {
+                    smallestNum = arrayList[i][pointers[i]]; 
+                    smallestPos = i ;
+                    break;
+                }
+            }
         }
-
-        // When a buffer is empty, grab more until it is all gone, then erase the file
-        
 
         // Freeing stuff
         for (int i = 0; i < strlen(fileName); i ++) {
             free(arrayList[i]);
         }
         free(outBuf);
-    }
 
+    }
 
     // Close files and return
     fclose(inFile);
@@ -318,5 +357,6 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+// FUCK YA LIFE BING BONG
 // 1024*1024*256 = 256 megabytes
 // /sizof(uint32_t) = number of ints in 256 megabytes
