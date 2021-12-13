@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <string.h>
 
+
 int main(int argc, char* argv[]) {
     char* fileName;
 
@@ -14,11 +15,11 @@ int main(int argc, char* argv[]) {
 
     FILE* inFile = fopen(fileName, "rb+");
 
-    uint32_t* arr = (uint32_t*) malloc(sizeof(uint32_t) * 167772165);
+    uint32_t* arr = (uint32_t*) malloc(sizeof(uint32_t) * 192000000);
 
-    fread(arr, sizeof(uint32_t), 167772165, inFile);
+    fread(arr, sizeof(uint32_t),192000000 , inFile);
 
-    for (uint32_t i = 0; i < 167772165; i++) {
+    for (uint32_t i = 0; i <192000000; i++) {
         printf("%d\n", arr[i]);
     }
 

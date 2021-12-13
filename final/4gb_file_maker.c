@@ -21,7 +21,7 @@ int main() {
   printf("fd=%d\n", fd);
   printf("errno: %s\n", strerror(errno));
 
-  for(int q=0; q < 3; q++) { // q < 16 is 4 gigs
+  for(int q=0; q < 2; q++) { // q < 16 is 4 gigs
     for(int i=0; i < SZ; i++) {
       buf[i] = rand();
     }
