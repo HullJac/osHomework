@@ -15,11 +15,11 @@ int main(int argc, char* argv[]) {
 
     FILE* inFile = fopen(fileName, "rb+");
 
-    uint32_t* arr = (uint32_t*) malloc(sizeof(uint32_t) * 192000000);
+    uint32_t* arr = (uint32_t*) malloc(sizeof(uint32_t) * 201326592);
 
-    fread(arr, sizeof(uint32_t),192000000 , inFile);
+    fread(arr, sizeof(uint32_t),201326592 , inFile);
 
-    for (uint32_t i = 0; i <192000000; i++) {
+    for (uint32_t i = 0; i <201326592; i++) {
         printf("%d\n", arr[i]);
     }
 

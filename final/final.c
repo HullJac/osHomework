@@ -56,7 +56,6 @@ int main(int argc, char* argv[]) {
 
     // If we can just sort everything in memory
     if (size < fiveT) { // Number here is 512 megabytes
-        printf("in base if\n");
         uint32_t numNums = size/4;
         
         // Create and array the size of the number of ints we have
@@ -84,7 +83,6 @@ int main(int argc, char* argv[]) {
         while (sizeCmp > 0) {
             // If there is more than 512 megabytes
             if (sizeCmp >= fiveT) {
-                printf("in the if I thought\n");
                 uint32_t numNums = twoF / 4;
                 
                 // First array
@@ -129,7 +127,6 @@ int main(int argc, char* argv[]) {
             else {
                 // If the size left is between the 512 and 256 MB
                 if (sizeCmp > twoF) {
-                    printf("not the one i thought\n");
 
                     // First array
                     uint32_t arrsz = twoF / 4;
@@ -175,8 +172,6 @@ int main(int argc, char* argv[]) {
                 // Just create one more file
                 // If the size is 256 MB or less
                 else {
-                    printf("in the last else\n");
-                    
                     uint32_t arrsz = sizeCmp / 4;
                     uint32_t* arr1 = (uint32_t*) malloc(sizeof(uint32_t) * arrsz);
                     fread(arr1, sizeof(uint32_t), arrsz, inFile);
@@ -254,7 +249,6 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < strlen(fileName); i++) {
                 // Check if any of the pointers are at the end of the buffer size
                 if (pointers[i] > ((twoF/4)/strlen(fileName)) && bytesLeft[i] != 0 && buffsDone[i] != 1) {
-                    printf("pointers[%d] :value = %d\n",i ,pointers[i]);
                     // Read in more data to that buffer
                     fread(arrayList[i], sizeof(uint32_t), ((twoF/4)/strlen(fileName)), fileList[i]);
                     pointers[i] = 0;
