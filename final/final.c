@@ -8,13 +8,11 @@
 #include <string.h>
 
 /// Info about project////
-// Num threads = 4
 // 768 free RAM
+// Actually about 1 GB of ram free
 
 uint32_t fiveT = 536870912;
 uint32_t twoF = 268435456;
-//uint32_t fiveT = 512000000;
-//uint32_t twoF = 256000000;
 
 // Function to compare ints in ascending order
 int compare(const void* one, const void* two) {
@@ -125,7 +123,6 @@ int main(int argc, char* argv[]) {
 
                 // Substract from temp size
                 sizeCmp -= fiveT;
-                
             }
 
             // Have to do math to figure out sizes of stuff
@@ -173,7 +170,6 @@ int main(int argc, char* argv[]) {
 
                     // Set the size value to 0 since we are done
                     sizeCmp -= sizeCmp;
-
                 }
                 
                 // Just create one more file
@@ -203,9 +199,6 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-
-        // Bools for main loop
-        uint8_t empty = 0;
 
         // Keeps track of number of completed files
         uint8_t buffsDone[strlen(fileName)];
@@ -263,7 +256,7 @@ int main(int argc, char* argv[]) {
                 if (pointers[i] > ((twoF/4)/strlen(fileName)) && bytesLeft[i] != 0 && buffsDone[i] != 1) {
                     printf("pointers[%d] :value = %d\n",i ,pointers[i]);
                     // Read in more data to that buffer
-                    uint32_t bytesRead = fread(arrayList[i], sizeof(uint32_t), ((twoF/4)/strlen(fileName)), fileList[i]);
+                    fread(arrayList[i], sizeof(uint32_t), ((twoF/4)/strlen(fileName)), fileList[i]);
                     pointers[i] = 0;
                 }
 
@@ -292,7 +285,7 @@ int main(int argc, char* argv[]) {
             outCounter ++;
 
             // If the outBuffer is full
-            if (outCounter == ((twoF / 4) / 2)) {  
+            if (outCounter == ((twoF / 4) / 2) || numBuffsDone == strlen(fileName)) {  
                 fwrite(outBuf, sizeof(uint32_t), outCounter, outFile);
                 outCounter = 0;
             }
@@ -307,23 +300,22 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Freeing stuff
+        // Freeing stuff and closing files and removing temp files
+        char fName[32] = {};
         for (int i = 0; i < strlen(fileName); i ++) {
+            strcat(fName, "a");
             free(arrayList[i]);
             fclose(fileList[i]);
+            remove(fName);
         }
         free(outBuf);
-
+        
     }
 
-    // Close files and return
+    // Close in and out files and return
     fclose(inFile);
     fclose(outFile);
 
-    // TODO Remove all the extra files
-    // To erase a file use remove("filename")
     
     return 0;
 }
-
-// FUCK YA LIFE BING BONG
