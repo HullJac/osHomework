@@ -42,20 +42,20 @@ int main(int argc, char* argv[]) {
         fprintf(stderr,"Something when wrong with input.\n");
     }
 
-    // File information
+    // File name information
     char fileName[32] = {};
     
-    // Get how big a file is in bytes and how many numbers there are
+    // Get how big a file is in bytes
     struct stat st;
     stat(inFileName, &st);
     uint64_t size = st.st_size;
 
-    // Open a file to the in and out files
+    // Open a file pointer to the in and out files
     FILE* inFile = fopen(inFileName, "rb+");
     FILE* outFile = fopen(outFileName, "wb+");
 
     // If we can just sort everything in memory
-    if (size < fiveT) { // Number here is 512 megabytes
+    if (size < fiveT) { // fiveT here is 512 megabytes or whatever is up top
         uint32_t numNums = size/4;
         
         // Create and array the size of the number of ints we have
@@ -79,7 +79,6 @@ int main(int argc, char* argv[]) {
         // Temporary size variable for while loop 
         uint64_t sizeCmp = size;
 
-        // Decide how big chunks should be
         while (sizeCmp > 0) {
             // If there is more than 512 megabytes
             if (sizeCmp >= fiveT) {
@@ -142,6 +141,7 @@ int main(int argc, char* argv[]) {
                     fwrite(arr1, sizeof(uint32_t), arrsz, tempFile);
                     fclose(tempFile);
                     
+                    // Freeing stuff
                     free(arr1);
                     free(fName1);
 
@@ -234,7 +234,6 @@ int main(int argc, char* argv[]) {
             buffsDone[i] = 0;
 
             // Fill the bytesLeft array
-            struct stat s;
             stat(fn, &st);
             bytesLeft[i] = st.st_size;
         }
@@ -254,6 +253,7 @@ int main(int argc, char* argv[]) {
                     pointers[i] = 0;
                 }
 
+                // Check if there is anything to compare
                 if (bytesLeft[i] == 0);
                 
                 else if (smallestNum > arrayList[i][pointers[i]]) {
